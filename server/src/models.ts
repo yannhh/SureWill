@@ -1,0 +1,38 @@
+import mongoose, { Schema } from "mongoose";
+
+const userSchema = new Schema({
+  username: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
+  password_hash: { type: String, required: true },
+  last_active: { type: Date, default: Date.now },
+  account_status: { type: String, default: "active" },
+  otp_code: { type: String },
+  otp_expires: { type: Date },
+  reset_token: { type: String },
+  reset_expires: { type: Date },
+  totp_secret: { type: String },
+  totp_enabled: { type: Boolean, default: false },
+});
+
+const assetsSchema = new Schema({
+  userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  encrypted_data: { type: String, required: true },
+  nonce: { type: String, required: true },
+  file_name: String,
+  file_type: String,
+  file_size: Number,
+  created_at: { type: Date, default: Date.now },
+});
+
+const benefeciarySchema = new Schema({
+  userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  full_name: String,
+  email: String,
+  relationship: String,
+  access_granted: { type: Boolean, default: false },
+  assigned_assets: [{ type: Schema.Types.ObjectId, ref: "Asset" }],
+});
+
+export const User = mongoose.model("User", userSchema);
+export const Asset = mongoose.model("Asset", assetsSchema);
+export const Beneficiary = mongoose.model("Beneficiary", benefeciarySchema);

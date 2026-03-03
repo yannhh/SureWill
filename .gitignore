@@ -1,0 +1,11 @@
+# Ignore node modules
+node_modules/
+**/node_modules/
+
+# Ignore environment variables
+.env
+**/.env
+
+# Ignore security certificates
+**/*.pem
+server/security/
