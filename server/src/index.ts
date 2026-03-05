@@ -12,6 +12,7 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import * as QRCode from "qrcode";
 import { authenticator } from "@otplib/preset-default";
+import { assert } from "console";
 
 // I'm defining a 'shape' for the data I expect when a user uploads a file. This helps prevent errors.
 interface VaultUploadRequest {
@@ -396,7 +397,7 @@ app.post("/api/reset-password", async (req, res) => {
 
 // This endpoint handles uploading a new (simulated) encrypted asset to the user's vault.
 app.post("/api/vault/upload", async (req, res) => {
-  const { userId, encryptedData, nonce, fileName, fileType, fileSize } =
+  const { userId, encryptedData, nonce, shards, fileName, fileType, fileSize } =
     req.body;
 
   try {
@@ -405,6 +406,7 @@ app.post("/api/vault/upload", async (req, res) => {
       userId,
       encrypted_data: encryptedData,
       nonce,
+      shards: shards,
       file_name: fileName,
       file_type: fileType,
       file_size: fileSize,
@@ -485,18 +487,46 @@ app.post("/api/vault/access", async (req, res) => {
   const { assetId, beneficiaryId } = req.body;
 
   try {
-    await Beneficiary.findByIdAndUpdate(beneficiaryId, {
-      // '$addToSet' is a handy MongoDB operator that adds an item to an array only if it's not already there.
-      $addToSet: { assigned_assets: assetId },
-    });
+    // 1. Locate the asset in the vault
+    const asset = await Asset.findById(assetId);
+    if (!asset || !asset.shards || asset.shards.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "No cryptographic shards were found for this asset." });
+    }
+
+    //2. Find the beneficiary
+    const beneficiary = await Beneficiary.findById(beneficiaryId);
+    if (!beneficiary) {
+      return res.status(400).json({ error: "Beneficiary not found." });
+    }
+
+    //3. Preventing duplicate assignments
+    const alreadyAssigned = beneficiary.assigned_assets.some(
+      (a: any) => a.assetId?.toString() === assetId,
+    );
+    if (alreadyAssigned) {
+      return res
+        .status(400)
+        .json({ error: "Asset is already assigned to this beneficiary." });
+    }
+
+    const shardToAssign = asset.shards.pop();
+    await asset.save();
+
+    beneficiary.assigned_assets.push({
+      assetId: assetId,
+      shard: shardToAssign,
+    } as any);
+
+    await beneficiary.save();
+
     res.status(201).json({
-      message: "Beneficiary has been granted access to the asset.",
+      message: "Cryptographic shard successfully assigned to beneficiary.",
     });
   } catch (err) {
     console.error(err);
-    res
-      .status(500)
-      .json({ error: "Error linking the asset to the beneficiary." });
+    res.status(500).json({ error: "Error assigning shard to the asset." });
   }
 });
 

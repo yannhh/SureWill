@@ -18,6 +18,7 @@ const assetsSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   encrypted_data: { type: String, required: true },
   nonce: { type: String, required: true },
+  shards: [{ type: String }],
   file_name: String,
   file_type: String,
   file_size: Number,
@@ -30,7 +31,12 @@ const benefeciarySchema = new Schema({
   email: String,
   relationship: String,
   access_granted: { type: Boolean, default: false },
-  assigned_assets: [{ type: Schema.Types.ObjectId, ref: "Asset" }],
+  assigned_assets: [
+    {
+      assetId: { type: Schema.Types.ObjectId, ref: "Asset" },
+      shard: { type: String },
+    },
+  ],
 });
 
 export const User = mongoose.model("User", userSchema);

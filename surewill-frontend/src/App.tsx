@@ -6,6 +6,7 @@ import Register from "./components/Register";
 import VaultUpload from "./components/VaultUpload";
 import BeneficiaryList from "./components/BeneficiaryList";
 import { TOTPSetup } from "./components/TOTPSetup";
+import VaultUnlock from "./components/VaultUnlock";
 
 function AppContent() {
   const { userId, setUserId, isLoggedIn, logout } = useAuth();
@@ -51,6 +52,13 @@ function AppContent() {
 
             <section>
               <BeneficiaryList userId={userId!} />
+            </section>
+
+            <section>
+              <VaultUnlock assetId="69a8452aca522513127d46c5" /> //this is
+              hardcoded because the app does not yet have a state management
+              system to tell VaultUnlock which file it should be looking at
+              coded
             </section>
           </main>
         </div>
