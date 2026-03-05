@@ -7,10 +7,15 @@ import VaultUpload from "./components/VaultUpload";
 import BeneficiaryList from "./components/BeneficiaryList";
 import { TOTPSetup } from "./components/TOTPSetup";
 import VaultUnlock from "./components/VaultUnlock";
+import HeirDashboard from "./components/HeirDashboard";
 
 function AppContent() {
   const { userId, setUserId, isLoggedIn, logout } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
+  const [activeClaim, setActiveClaim] = useState<{
+    id: string;
+    shard: string;
+  } | null>(null);
 
   return (
     <div className="App">
@@ -55,11 +60,41 @@ function AppContent() {
             </section>
 
             <section>
-              <VaultUnlock assetId="69a8452aca522513127d46c5" /> //this is
-              hardcoded because the app does not yet have a state management
-              system to tell VaultUnlock which file it should be looking at
-              coded
+              <HeirDashboard
+                onSelectAsset={(id, shard) => setActiveClaim({ id, shard })}
+              />
             </section>
+
+            {activeClaim && (
+              <section>
+                <VaultUnlock assetId={activeClaim.id} />
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px",
+                    backgroundColor: "#f7fafc",
+                    borderRadius: "5px",
+                  }}
+                >
+                  <p style={{ fontSize: "11px", color: "#2d3748" }}>
+                    <strong>Your Shard A:</strong> <br />
+                    <code style={{ wordBreak: "break-all" }}>
+                      {activeClaim.shard}
+                    </code>
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "10px",
+                      color: "#718096",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    (Copy this, then paste it alongside a shard from the vault
+                    into the box above)
+                  </p>
+                </div>
+              </section>
+            )}
           </main>
         </div>
       )}
@@ -67,7 +102,6 @@ function AppContent() {
   );
 }
 
-// Ensure the Provider wraps the content so useAuth works!
 function App() {
   return (
     <AuthProvider>

@@ -7,64 +7,85 @@ const VaultUnlock: React.FC<{ assetId: string }> = ({ assetId }) => {
   const [status, setStatus] = useState("");
 
   const handleUnlock = async () => {
-    if (!shardsInput) return setStatus("Please enter the required shards.");
-    setStatus("Fetching encrypted asset...");
+    // The new method allows automation for the system shard to be released.
+    if (!shardsInput) return setStatus("Please enter your assigned Shard.");
+    setStatus("Fetching vault data and authorizing release...");
 
     try {
-      // 1. Fetch the encrypted file data and nonce from your Express backend
+      // getting the encrypted data and the system shard
       const res = await fetch(`/api/vault/download/${assetId}`);
       const asset = await res.json();
 
-      if (!asset || asset.error)
-        return setStatus(asset.error || "Asset not found.");
+      if (!asset || asset.error) return setStatus(asset.error);
+
+      // 2. SECURITY CHECK: Verify the server actually released the system shard
+      if (!asset.systemShard) {
+        return setStatus(
+          "Access Denied: The system shard is still locked. The owner is currently active.",
+        );
+      }
 
       await _sodium.ready;
       const sodium = _sodium;
 
-      // 2. Process the Shards
-      // Convert the comma-separated hex strings back into Uint8Arrays
-      const hexShards = shardsInput.split(",").map((s) => s.trim());
-      const shardBuffers = hexShards.map((hex) => sodium.from_hex(hex));
+      setStatus("Reconstructing Master Key via Hybrid Consensus...");
 
-      setStatus("Reconstructing Master Key...");
+      //Reconstructing the key
 
-      // 3. SSS RECONSTRUCTION: Combine the shards to restore the Master Key
-      // This will automatically fail if the threshold (k) is not met
-      const masterKey = await combine(shardBuffers);
+      // 1. Parsing the input of the user
+      const userShards = shardsInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s !== "");
 
-      // 4. Prepare for Decryption
-      // Convert the Base64 strings from the database back to Uint8Arrays
+      // 2. The math part
+      // The total shards collected; so the user shards and system shard together
+      const totalCollected = userShards.length + 1;
+
+      if (totalCollected < asset.threshold) {
+        return setStatus(
+          `Threshold was not met. To unlock, this asset requires ${asset.threshold} shards. You provided ${userShards.length}, System provides 1 automatically.`,
+        );
+      }
+
+      setStatus(
+        `Reconstructing the key (${totalCollected}/${asset.threshold} shards)...`,
+      );
+
+      // 3. Converting all the shards to buffers
+      const userShardsBuffers = userShards.map((hex) => sodium.from_hex(hex));
+      const systemShardBuffer = sodium.from_hex(asset.systemShard);
+
+      // 4. Combine
+      const masterKey = await combine([
+        ...userShardsBuffers,
+        systemShardBuffer,
+      ]);
+
+      // decrypting the assets metadata
       const ciphertext = sodium.from_base64(asset.encrypted_data);
       const nonce = sodium.from_base64(asset.nonce);
 
-      setStatus("Decrypting vault contents...");
-
-      // 5. DECRYPTION: Open the secretbox using the reconstructed key
       const decryptedBytes = sodium.crypto_secretbox_open_easy(
         ciphertext,
         nonce,
         masterKey,
       );
 
-      // 6. Trigger File Download in the Browser
-      // Convert the raw bytes back into a downloadable file
+      // downloading
       const blob = new Blob([new Uint8Array(decryptedBytes)], {
         type: asset.file_type || "application/octet-stream",
       });
       const url = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
-      a.download = asset.file_name || "SureWill_Unlocked_Asset.bin";
-      document.body.appendChild(a);
+      a.download = asset.file_name || "SureWill_Unlocked.bin";
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
 
-      setStatus("Vault Unlocked! File download initiated.");
+      setStatus("Success! Vault Unlocked and file downloaded.");
     } catch (err) {
       console.error(err);
-      setStatus("Decryption Failed: Invalid shards or threshold not met.");
+      setStatus("Decryption Failed: Invalid shard or threshold math error.");
     }
   };
 

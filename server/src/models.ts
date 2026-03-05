@@ -19,6 +19,8 @@ const assetsSchema = new Schema({
   encrypted_data: { type: String, required: true },
   nonce: { type: String, required: true },
   shards: [{ type: String }],
+  threshold: { type: Number, required: true, default: 2 },
+  total_shards: { type: Number, required: true, default: 3 },
   file_name: String,
   file_type: String,
   file_size: Number,

@@ -7,6 +7,9 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
   const [fileName, setFileName] = useState("");
   const [status, setStatus] = useState("");
 
+  const [nTotal, setNTotal] = useState(3);
+  const [kThreshold, setKThreshold] = useState(2);
+
   const handleUpload = async () => {
     if (!selectedFile) return setStatus("No file selected");
 
@@ -20,7 +23,10 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
     const fileData = new Uint8Array(fileBuffer);
 
     const masterKey = sodium.randombytes_buf(sodium.crypto_secretbox_KEYBYTES);
-    const shards = await split(masterKey, 3, 2);
+
+    // Updated this; split is dynamic now as per user input for threshold customizability
+    const shards = await split(masterKey, nTotal, kThreshold);
+
     const hexShards = shards.map((s) => sodium.to_hex(s));
 
     // 2. Generating the Nonce (basically a one time random number)
@@ -44,6 +50,8 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
         encryptedData: encryptedBase64, //
         nonce: nonceBase64,
         shards: hexShards,
+        threshold: kThreshold,
+        totalShards: nTotal,
         fileName: fileName || selectedFile.name,
         fileType: selectedFile.type,
         fileSize: selectedFile.size,
@@ -67,6 +75,40 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
           placeholder="Asset Name (e.g., Last Will)"
           onChange={(e) => setFileName(e.target.value)}
         />
+
+        <div
+          style={{
+            display: "flex",
+            gap: "15px",
+            margin: "10px",
+            fontSize: "14px",
+          }}
+        >
+          <label>
+            <strong>Total Shards (n):</strong>
+            <input
+              type="number"
+              min="2"
+              max="10"
+              value={nTotal}
+              onChange={(e) => setNTotal(Number(e.target.value))}
+              style={{ width: "60px", marginLeft: "5px" }}
+            />
+          </label>
+
+          <label>
+            <strong>Required (k):</strong>
+            <input
+              type="number"
+              min="2"
+              max={nTotal}
+              value={kThreshold}
+              onChange={(e) => setKThreshold(Number(e.target.value))}
+              style={{ width: "60px", marginLeft: "5px" }}
+            />
+          </label>
+        </div>
+
         <button onClick={handleUpload}>Encrypt & Store</button>
       </div>
       {status && <p className="status-msg">{status}</p>}

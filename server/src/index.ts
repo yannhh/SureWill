@@ -397,8 +397,17 @@ app.post("/api/reset-password", async (req, res) => {
 
 // This endpoint handles uploading a new (simulated) encrypted asset to the user's vault.
 app.post("/api/vault/upload", async (req, res) => {
-  const { userId, encryptedData, nonce, shards, fileName, fileType, fileSize } =
-    req.body;
+  const {
+    userId,
+    encryptedData,
+    nonce,
+    shards,
+    threshold,
+    totalShards,
+    fileName,
+    fileType,
+    fileSize,
+  } = req.body;
 
   try {
     // I'm creating a new document in my 'assets' collection with all the file details.
@@ -407,6 +416,8 @@ app.post("/api/vault/upload", async (req, res) => {
       encrypted_data: encryptedData,
       nonce,
       shards: shards,
+      threshold: threshold,
+      total_shards: totalShards,
       file_name: fileName,
       file_type: fileType,
       file_size: fileSize,
@@ -440,6 +451,7 @@ app.get("/api/vault/list/:userId", async (req, res) => {
 });
 
 // This endpoint is for "downloading" an asset. It sends the encrypted data and nonce for the frontend to decrypt.
+// Update 5th March, 2026. This endpoint is now going to release the system shard automatically if the  Dead Man's Switch is triggered.
 app.get("/api/vault/download/:assetId", async (req, res) => {
   const { assetId } = req.params;
 
@@ -447,13 +459,42 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
     const asset = await Asset.findById(assetId);
 
     if (!asset) {
-      return res.status(404).json({ error: "Digital Asset not found." });
+      return res.status(404).json({ error: "Asset could not be found." });
     }
 
-    res.json(asset);
+    // Find the beneficiary record that has the specific asset id bound to them
+    const beneficiary = await Beneficiary.findOne({
+      "assigned_assets.assetId": asset._id,
+    });
+
+    let systemShard = null;
+
+    // Security Point: The shard will only be released if the Dead Man's Switch has been triggered
+    if (beneficiary && beneficiary.access_granted) {
+      // Get the first shard remaining in the asset as the system shard
+      systemShard = asset.shards[0];
+
+      console.log(
+        `[Authenticated] Dead Man's Switch triggered. Releasing System Shard for Asset: ${assetId}`,
+      );
+    } else {
+      console.log(
+        `[Security] Access Denied. System Shard remains locked for Asset: ${assetId}`,
+      );
+    }
+
+    // This will now send the encrypted data, nonce and the system shard
+    res.json({
+      encrypted_data: asset.encrypted_data,
+      nonce: asset.nonce,
+      file_name: asset.file_name,
+      file_type: asset.file_type,
+      threshold: asset.threshold,
+      systemShard: systemShard, // This will be null if access_granted is false
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to get the asset data." });
+    console.error("Download  Error", err);
+    res.status(500).json({ error: "Failed to get asset data." });
   }
 });
 
@@ -527,6 +568,34 @@ app.post("/api/vault/access", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error assigning shard to the asset." });
+  }
+});
+
+// Get the assets and shards assigned to a specific beneficiary
+app.get("/api/beneficiary/claims/:email", async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    const beneficiary = await Beneficiary.findOne({ email });
+
+    if (!beneficiary) {
+      return res.status(404).json({ error: "No beneficiary found." });
+    }
+
+    // This is a security check. It only returns the shards if the Dead Man's Switch has been triggered
+    if (!beneficiary.access_granted) {
+      return res.status(403).json({
+        error: "Access Denied. The vault is still locked by the owner.",
+      });
+    }
+
+    // Return the list of assets and the specific shards the heir has
+    res.json({
+      fullName: beneficiary.full_name,
+      claims: beneficiary.assigned_assets, // This one returns the db array of assetId and the shar
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error getting the claims of user." });
   }
 });
 
