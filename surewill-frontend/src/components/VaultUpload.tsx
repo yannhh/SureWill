@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { split } from "shamir-secret-sharing";
 import _sodium from "libsodium-wrappers";
 
@@ -7,15 +7,42 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
   const [fileName, setFileName] = useState("");
   const [status, setStatus] = useState("");
 
-  const [nTotal, setNTotal] = useState(3);
+  const [nTotal, setNTotal] = useState(2); //Default is 2
   const [kThreshold, setKThreshold] = useState(2);
+
+  const [heirCount, setHeirCount] = useState(0);
+
+  useEffect(() => {
+    // Fetch the beneficiary count to enforce strict SSS math
+    const fetchHeirCount = async () => {
+      try {
+        const res = await fetch(`/api/beneficiaries/${userId}`);
+        const data = await res.json();
+        setHeirCount(data.length || 0);
+      } catch (err) {
+        console.error("Failed to fetch heir count");
+      }
+    };
+    fetchHeirCount();
+  }, [userId]);
 
   const handleUpload = async () => {
     if (!selectedFile) return setStatus("No file selected");
 
     // Note: Final version will use libsodium here
 
+    // SSS Restriction of Shard Distribution
+    const shardsForHeirs = nTotal - 1;
+    if (shardsForHeirs > heirCount) {
+      return setStatus(
+        `Error! You are generating ${shardsForHeirs} distributable shards. You have ${heirCount} registered heirs. Register more heirs, or lower your Total Shards (n).`,
+      );
+    }
+    if (kThreshold > nTotal)
+      return setStatus("Required (k) cannot exceed Total Shards (n)!");
+
     // 1. This is the Mock master key
+    setStatus("Encrypting and Splitting shards...");
     await _sodium.ready;
     const sodium = _sodium;
 
@@ -89,7 +116,7 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
             <input
               type="number"
               min="2"
-              max="10"
+              max={heirCount + 1}
               value={nTotal}
               onChange={(e) => setNTotal(Number(e.target.value))}
               style={{ width: "60px", marginLeft: "5px" }}

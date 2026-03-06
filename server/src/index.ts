@@ -523,6 +523,16 @@ app.post("/api/beneficiaries", async (req, res) => {
   }
 });
 
+// This endpoint allows the user to see all the beneficiaries they have. Basically, a helper for assigning a specific asset
+app.get("/api/beneficiaries/:userId", async (req, res) => {
+  try {
+    const list = await Beneficiary.find({ userId: req.params.userId });
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get beneficiaries." });
+  }
+});
+
 // This endpoint is for assigning a specific asset to a specific beneficiary.
 app.post("/api/vault/access", async (req, res) => {
   const { assetId, beneficiaryId } = req.body;
@@ -530,7 +540,10 @@ app.post("/api/vault/access", async (req, res) => {
   try {
     // 1. Locate the asset in the vault
     const asset = await Asset.findById(assetId);
-    if (!asset || !asset.shards || asset.shards.length === 0) {
+
+    // Updating this to stop the backend from popping the system shard (index 0)
+    // I'm basically creating a permanent reserve of the last shard for the system here
+    if (!asset || !asset.shards || asset.shards.length <= 1) {
       return res
         .status(400)
         .json({ error: "No cryptographic shards were found for this asset." });
