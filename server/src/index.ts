@@ -10,9 +10,6 @@ import dbConnection from "./db";
 import { User, Asset, Beneficiary } from "./models";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
-import * as QRCode from "qrcode";
-import { authenticator } from "@otplib/preset-default";
-import { assert } from "console";
 
 // I'm defining a 'shape' for the data I expect when a user uploads a file. This helps prevent errors.
 interface VaultUploadRequest {
@@ -247,7 +244,7 @@ app.post("/api/login", async (req, res) => {
 });
 
 // After the user gets the OTP from their email, they send it here to be verified.
-app.post("/api/totp/verify-otp", async (req, res) => {
+app.post("/api/otp/verify-otp", async (req, res) => {
   const { userId, otp } = req.body;
   try {
     const user = await User.findById(userId);
@@ -279,61 +276,6 @@ app.post("/api/totp/verify-otp", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Verification Failed." });
-  }
-});
-
-// This endpoint is for verifying the 6-digit code from an authenticator app like Google or Microsoft Authenticator.
-app.post("/api/totp/verify", async (req, res) => {
-  const { userId, token } = req.body;
-  try {
-    const user = await User.findById(userId);
-    if (!user || !user.totp_secret) {
-      return res
-        .status(400)
-        .json({ error: "TOTP not configured for this user." });
-    }
-
-    // The otplib library does the hard work of checking if the 6-digit code is correct based on the secret I stored for the user.
-    const isValid = authenticator.check(token, user.totp_secret);
-
-    if (isValid) {
-      // If the code is valid, I'll mark that TOTP is officially enabled for this user.
-      user.totp_enabled = true;
-      await user.save();
-      res.json({ message: "TOTP Enabled Successfully!" });
-    } else {
-      res.status(401).json({ error: "Invalid authenticator code." });
-    }
-  } catch (err) {
-    res.status(500).json({ error: "Server error during verification." });
-  }
-});
-
-// This endpoint generates the secret and a QR Code for the user to scan with their authenticator app.
-app.post("/api/totp/setup", async (req, res) => {
-  const { userId } = req.body;
-  try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    // 1. I'll generate a new secret using the otplib library.
-    const secret = authenticator.generateSecret();
-    user.totp_secret = secret;
-    await user.save();
-
-    // 2. I'll create a special URL (a "key URI") that authenticator apps understand.
-    // It contains the secret, the app name ('SureWillVault'), and the user's email.
-    const otpauth = authenticator.keyuri(user.email, "SureWillVault", secret);
-
-    // 3. Now, I'll turn that special URL into a QR code image.
-    // The result is a long string of text (a "data URL") that browsers can render as an image.
-    const qrCodeDataURL = await QRCode.toDataURL(otpauth);
-
-    // I'll send this QR code data back to the frontend so it can be displayed to the user.
-    res.json({ qrCode: qrCodeDataURL });
-  } catch (err: any) {
-    console.error("QR Generation Error:", err.message);
-    res.status(500).json({ error: "Failed to generate QR code" });
   }
 });
 

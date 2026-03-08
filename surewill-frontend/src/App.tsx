@@ -5,7 +5,6 @@ import { Authenticator } from "./components/Authenticator";
 import Register from "./components/Register";
 import VaultUpload from "./components/VaultUpload";
 import BeneficiaryList from "./components/BeneficiaryList";
-import { TOTPSetup } from "./components/TOTPSetup";
 import VaultUnlock from "./components/VaultUnlock";
 import HeirDashboard from "./components/HeirDashboard";
 
@@ -65,10 +64,6 @@ function AppContent() {
           </header>
 
           <main className="dashboard-grid">
-            <section>
-              <TOTPSetup userId={userId!} />
-            </section>
-
             <section>
               <VaultUpload
                 userId={userId!}

@@ -22,7 +22,7 @@ export const Authenticator = ({
       });
 
       const data = await res.json();
-      console.log("ARE YU WORKING??????? HELLO", data);
+      console.log("Mic Test, It's working!", data);
 
       if (data.userId) {
         setTempUserId(data.userId);
@@ -36,7 +36,7 @@ export const Authenticator = ({
   };
 
   const verifyOtp = async () => {
-    const res = await fetch("/api/totp/verify-otp", {
+    const res = await fetch("/api/otp/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: tempUserId, otp }),

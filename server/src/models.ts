@@ -10,8 +10,6 @@ const userSchema = new Schema({
   otp_expires: { type: Date },
   reset_token: { type: String },
   reset_expires: { type: Date },
-  totp_secret: { type: String },
-  totp_enabled: { type: Boolean, default: false },
   public_key: { type: String }, //Storing the user's digital signature key (Ed25519)
 });
 
