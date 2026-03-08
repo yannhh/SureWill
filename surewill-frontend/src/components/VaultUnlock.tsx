@@ -74,7 +74,7 @@ const VaultUnlock: React.FC<{ assetId: string }> = ({ assetId }) => {
 
       if (!decryptedBytes || decryptedBytes.length === 0) {
         return setStatus(
-          "Decryption Failed: Invalid shard or threshold math error.",
+          "Decryption Failed: Invalid shard or Database Encrypted Data was Tampered!",
         );
       }
 
@@ -91,7 +91,7 @@ const VaultUnlock: React.FC<{ assetId: string }> = ({ assetId }) => {
 
       if (currentHash !== asset.fileHash) {
         return setStatus(
-          "Critical Error! File Integrity Check failed. The contents may have beeen altered.",
+          "Critical Error! File Integrity Check failed. The contents may have been altered.",
         );
       }
 
@@ -124,7 +124,7 @@ const VaultUnlock: React.FC<{ assetId: string }> = ({ assetId }) => {
       setStatus("Success! Vault Unlocked and file downloaded.");
     } catch (err) {
       console.error(err);
-      setStatus("Decryption Failed: Invalid shard or threshold math error.");
+      setStatus("Decryption Failed: Invalid shard or Asset was Tampered!");
     }
   };
 
