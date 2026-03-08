@@ -404,6 +404,8 @@ app.post("/api/vault/upload", async (req, res) => {
     shards,
     threshold,
     totalShards,
+    fileHash,
+    signature,
     fileName,
     fileType,
     fileSize,
@@ -418,6 +420,9 @@ app.post("/api/vault/upload", async (req, res) => {
       shards: shards,
       threshold: threshold,
       total_shards: totalShards,
+      file_hash: fileHash,
+      signature: signature,
+      public_key: req.body.publicKey,
       file_name: fileName,
       file_type: fileType,
       file_size: fileSize,
@@ -483,6 +488,8 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
       );
     }
 
+    const owner = await User.findById(asset.userId);
+
     // This will now send the encrypted data, nonce and the system shard
     res.json({
       encrypted_data: asset.encrypted_data,
@@ -491,6 +498,10 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
       file_type: asset.file_type,
       threshold: asset.threshold,
       systemShard: systemShard, // This will be null if access_granted is false
+      fileHash: asset.file_hash,
+      signature: asset.signature,
+      public_key: asset.public_key,
+      ownerPublicKey: owner?.public_key,
     });
   } catch (err) {
     console.error("Download  Error", err);

@@ -12,6 +12,7 @@ const userSchema = new Schema({
   reset_expires: { type: Date },
   totp_secret: { type: String },
   totp_enabled: { type: Boolean, default: false },
+  public_key: { type: String }, //Storing the user's digital signature key (Ed25519)
 });
 
 const assetsSchema = new Schema({
@@ -25,6 +26,9 @@ const assetsSchema = new Schema({
   file_type: String,
   file_size: Number,
   created_at: { type: Date, default: Date.now },
+  file_hash: { type: String, required: true },
+  signature: { type: String, required: true },
+  public_key: { type: String, required: true },
 });
 
 const benefeciarySchema = new Schema({

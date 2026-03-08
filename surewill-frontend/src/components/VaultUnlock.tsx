@@ -72,6 +72,45 @@ const VaultUnlock: React.FC<{ assetId: string }> = ({ assetId }) => {
         masterKey,
       );
 
+      if (!decryptedBytes || decryptedBytes.length === 0) {
+        return setStatus(
+          "Decryption Failed: Invalid shard or threshold math error.",
+        );
+      }
+
+      // Re-verifying the fingerprint for integrity
+      setStatus("Verifying File Integrity...");
+      const currentHashBuffer = await crypto.subtle.digest(
+        "SHA-256",
+        decryptedBytes.buffer as ArrayBuffer,
+      );
+      const currentHashArray = Array.from(new Uint8Array(currentHashBuffer));
+      const currentHash = currentHashArray
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      if (currentHash !== asset.fileHash) {
+        return setStatus(
+          "Critical Error! File Integrity Check failed. The contents may have beeen altered.",
+        );
+      }
+
+      // Verifying the digital signature for authenticity
+      setStatus("Verifying Certified Signature...");
+      const isAuthentic = sodium.crypto_sign_verify_detached(
+        sodium.from_hex(asset.signature),
+        currentHash,
+        sodium.from_hex(asset.public_key),
+      );
+
+      if (!isAuthentic) {
+        return setStatus(
+          "Critical Error! Forgery Detected! The signature does not match the owner.",
+        );
+      }
+
+      setStatus("Success! File is Authentic.");
+
       // downloading
       const blob = new Blob([new Uint8Array(decryptedBytes)], {
         type: asset.file_type || "application/octet-stream",

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 
-const BeneficiaryList: React.FC<{ userId: string }> = ({ userId }) => {
+const BeneficiaryList: React.FC<{
+  userId: string;
+  onBeneficiaryAdded: () => void;
+  assetRefresh: number;
+}> = ({ userId, onBeneficiaryAdded, assetRefresh }) => {
   // State for fetching data for dropdowns
   const [assets, setAssets] = useState<any[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
@@ -18,7 +22,7 @@ const BeneficiaryList: React.FC<{ userId: string }> = ({ userId }) => {
   // Load dropdown data when the component loads
   useEffect(() => {
     fetchData();
-  }, [userId]);
+  }, [userId, assetRefresh]);
 
   const fetchData = async () => {
     try {
@@ -44,6 +48,7 @@ const BeneficiaryList: React.FC<{ userId: string }> = ({ userId }) => {
     if (res.ok) {
       setStatus("Beneficiary Added to Vault Trust!");
       fetchData(); // Refresh the dropdown so the new person appears
+      onBeneficiaryAdded();
     } else {
       setStatus(data.error);
     }

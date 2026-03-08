@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Authenticator } from "./components/Authenticator";
@@ -16,6 +16,24 @@ function AppContent() {
     id: string;
     shard: string;
   } | null>(null);
+  const [heirCount, setHeirCount] = useState(0);
+  const [assetRefresh, setAssetRefresh] = useState(0);
+
+  // Refreshing the count of heir from server
+  const refreshHeirCount = async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/beneficiaries/${userId}`);
+      const data = await res.json();
+      setHeirCount(data.length || 0);
+    } catch (err) {
+      console.error("Failed to sync beneficiary count.");
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) refreshHeirCount();
+  }, [isLoggedIn, userId]);
 
   return (
     <div className="App">
@@ -52,11 +70,19 @@ function AppContent() {
             </section>
 
             <section>
-              <VaultUpload userId={userId!} />
+              <VaultUpload
+                userId={userId!}
+                heirCount={heirCount}
+                onAssetUploaded={() => setAssetRefresh((prev) => prev + 1)}
+              />
             </section>
 
             <section>
-              <BeneficiaryList userId={userId!} />
+              <BeneficiaryList
+                userId={userId!}
+                onBeneficiaryAdded={refreshHeirCount}
+                assetRefresh={assetRefresh}
+              />
             </section>
 
             <section>

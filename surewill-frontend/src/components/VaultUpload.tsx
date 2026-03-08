@@ -1,30 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { split } from "shamir-secret-sharing";
 import _sodium from "libsodium-wrappers";
 
-const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
+const VaultUpload: React.FC<{
+  userId: string;
+  heirCount: number;
+  onAssetUploaded: () => void;
+}> = ({ userId, heirCount, onAssetUploaded }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [status, setStatus] = useState("");
 
   const [nTotal, setNTotal] = useState(2); //Default is 2
   const [kThreshold, setKThreshold] = useState(2);
-
-  const [heirCount, setHeirCount] = useState(0);
-
-  useEffect(() => {
-    // Fetch the beneficiary count to enforce strict SSS math
-    const fetchHeirCount = async () => {
-      try {
-        const res = await fetch(`/api/beneficiaries/${userId}`);
-        const data = await res.json();
-        setHeirCount(data.length || 0);
-      } catch (err) {
-        console.error("Failed to fetch heir count");
-      }
-    };
-    fetchHeirCount();
-  }, [userId]);
 
   const handleUpload = async () => {
     if (!selectedFile) return setStatus("No file selected");
@@ -56,17 +44,33 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
 
     const hexShards = shards.map((s) => sodium.to_hex(s));
 
-    // 2. Generating the Nonce (basically a one time random number)
+    // Generating the Nonce (basically a one time random number)
     // It's required for security, so it never reuses a nonce with the same key
     const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
 
-    // 3. Encrypting the data
+    // Encrypting the data
     // hexShards is the Uint8Array file
     const ciphertext = sodium.crypto_secretbox_easy(fileData, nonce, masterKey);
 
-    // 4. Preparing the data for transit
+    // Preparing the data for transit
     const encryptedBase64 = sodium.to_base64(ciphertext);
     const nonceBase64 = sodium.to_base64(nonce);
+
+    // Generating the SHA-256 Fingerprint for Anti Forgery
+    setStatus("Generating Anti-Forgery Fingerprint..");
+    const hashBuffer = await crypto.subtle.digest("SHA-256", fileData);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const fileHash = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    // Generating Digital Signature for Certified Authenticity of the file
+    setStatus("Signing Document with Digital Signature");
+    const signingKeypair = sodium.crypto_sign_keypair();
+    const signature = sodium.crypto_sign_detached(
+      fileHash,
+      signingKeypair.privateKey,
+    );
 
     // 5. Sending it to the backend
     const res = await fetch("/api/vault/upload", {
@@ -79,13 +83,22 @@ const VaultUpload: React.FC<{ userId: string }> = ({ userId }) => {
         shards: hexShards,
         threshold: kThreshold,
         totalShards: nTotal,
+        fileHash: fileHash,
+        signature: sodium.to_hex(signature),
+        publicKey: sodium.to_hex(signingKeypair.publicKey),
         fileName: fileName || selectedFile.name,
         fileType: selectedFile.type,
         fileSize: selectedFile.size,
       }),
     });
     const data = await res.json();
-    setStatus(data.message || "Upload Successful!");
+
+    if (res.ok) {
+      setStatus(data.message || "Upload Successful!");
+      onAssetUploaded();
+    } else {
+      setStatus(data.error || "Upload failed.");
+    }
   };
 
   return (
