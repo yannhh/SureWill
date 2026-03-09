@@ -76,7 +76,7 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
           setError(data.error || "Registration failed.");
         }
       } else if (mode === "otp") {
-        const res = await fetch("/api/totp/verify-otp", {
+        const res = await fetch("/api/otp/verify-otp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId: tempUserId, otp }),

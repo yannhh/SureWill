@@ -383,6 +383,24 @@ app.post("/api/vault/upload", async (req, res) => {
   }
 });
 
+// This endpoint allows the user to delete their asset from the frontend
+app.delete("/api/vault/delete/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deletedAsset = await Asset.findByIdAndDelete(id);
+
+    if (!deletedAsset) {
+      return res.status(404).json({ error: "Asset not found." });
+    }
+
+    res.status(200).json({ message: "Asset deleted successfully." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error deleting the asset." });
+  }
+});
+
 // This endpoint lets the user see a list of all the files they own.
 app.get("/api/vault/list/:userId", async (req, res) => {
   const { userId } = req.params;
