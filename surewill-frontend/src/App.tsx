@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { Authenticator } from "./components/Authenticator";
-import Register from "./components/Register";
 import VaultUpload from "./components/VaultUpload";
 import BeneficiaryList from "./components/BeneficiaryList";
 import VaultUnlock from "./components/VaultUnlock";
 import HeirDashboard from "./components/HeirDashboard";
+import { Auth } from "./components/Auth";
 
 function AppContent() {
   const { userId, setUserId, isLoggedIn, logout } = useAuth();
-  const [showRegister, setShowRegister] = useState(false);
   const [activeClaim, setActiveClaim] = useState<{
     id: string;
     shard: string;
@@ -37,22 +35,8 @@ function AppContent() {
   return (
     <div className="App">
       {!isLoggedIn ? (
-        <div className="auth-view">
-          {showRegister ? (
-            <Register />
-          ) : (
-            <Authenticator setUserId={setUserId} />
-          )}
-          <div style={{ marginTop: "20px", textAlign: "center" }}>
-            <button
-              className="toggle-btn"
-              onClick={() => setShowRegister(!showRegister)}
-            >
-              {showRegister
-                ? "Already have a vault? Login"
-                : "New User? Create a Vault"}
-            </button>
-          </div>
+        <div>
+          <Auth setUserId={setUserId} />
         </div>
       ) : (
         <div className="dashboard-view">

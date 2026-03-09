@@ -1,0 +1,252 @@
+import { useState, useEffect, useRef } from "react";
+import { base44 } from "@/api/base44Client";
+import { Lock, Upload, Trash2, FileText, Image, Video, DollarSign, Scale, Heart, Key, Package, Plus, X, Check, Shield } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+const MotionDiv = motion.div;
+
+const CATEGORIES = [
+  { value: "document", label: "Document", icon: FileText, color: "#7B9E87" },
+  { value: "photo", label: "Photo", icon: Image, color: "#C9A96E" },
+  { value: "video", label: "Video", icon: Video, color: "#A07080" },
+  { value: "financial", label: "Financial", icon: DollarSign, color: "#6090A0" },
+  { value: "legal", label: "Legal", icon: Scale, color: "#8070A0" },
+  { value: "personal", label: "Personal", icon: Heart, color: "#C07070" },
+  { value: "password", label: "Password", icon: Key, color: "#A09060" },
+  { value: "other", label: "Other", icon: Package, color: "#909090" },
+];
+
+const getCat = (v) => CATEGORIES.find(c => c.value === v) || CATEGORIES[7];
+
+const EMPTY = { title: "", category: "document", description: "", assigned_to_beneficiary: "", unlock_condition: "" };
+
+export default function Vault() {
+  const [willId, setWillId] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY);
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef();
+  const [filterCat, setFilterCat] = useState("all");
+
+  useEffect(() => {
+    const load = async () => {
+      const u = await base44.auth.me();
+      let wills = await base44.entities.Will.filter({ created_by: u.email });
+      let wId;
+      if (wills.length === 0) {
+        const w = await base44.entities.Will.create({ full_name: u.full_name || "" });
+        wId = w.id;
+      } else {
+        wId = wills[0].id;
+      }
+      setWillId(wId);
+      const vault = await base44.entities.VaultItem.filter({ will_id: wId });
+      setItems(vault);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    let file_url = form.file_url || "";
+    if (file) {
+      setUploading(true);
+      const res = await base44.integrations.Core.UploadFile({ file });
+      file_url = res.file_url;
+      setUploading(false);
+    }
+    const data = { ...form, will_id: willId, file_url, file_name: file?.name || form.file_name || "", is_encrypted: true };
+    const created = await base44.entities.VaultItem.create(data);
+    setItems(prev => [...prev, created]);
+    setSaving(false);
+    setShowForm(false);
+    setForm(EMPTY);
+    setFile(null);
+  };
+
+  const handleDelete = async (id) => {
+    await base44.entities.VaultItem.delete(id);
+    setItems(prev => prev.filter(i => i.id !== id));
+  };
+
+  const filtered = filterCat === "all" ? items : items.filter(i => i.category === filterCat);
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#FAF7F2" }}>
+      <div className="w-10 h-10 rounded-full border-2 animate-spin" style={{ borderColor: "#7B9E87", borderTopColor: "transparent" }} />
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen px-6 py-12 max-w-4xl mx-auto" style={{ backgroundColor: "#FAF7F2" }}>
+      {/* Header */}
+      <MotionDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-10">
+        <p className="text-xs uppercase tracking-widest mb-2" style={{ color: "#8C8579" }}>Cryptographic vault</p>
+        <h1 className="font-serif text-4xl mb-2" style={{ color: "#2D2926", fontWeight: 300 }}>The Vault</h1>
+        <p className="text-sm" style={{ color: "#8C8579" }}>Store what matters most — documents, memories, and messages — sealed until the right moment.</p>
+      </MotionDiv>
+
+      {/* Vault seal banner */}
+      <MotionDiv initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
+        className="rounded-2xl p-5 mb-8 flex items-center gap-4"
+        style={{ background: "linear-gradient(135deg, #1C2830, #263040)", boxShadow: "0 4px 24px rgba(0,0,0,0.15)" }}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(201,169,110,0.15)" }}>
+          <Shield className="w-5 h-5" style={{ color: "#C9A96E" }} />
+        </div>
+        <div>
+          <p className="text-sm font-medium" style={{ color: "#F5F0E8" }}>End-to-end encrypted vault</p>
+          <p className="text-xs" style={{ color: "#7B8C99" }}>All items are cryptographically sealed. {items.length} item{items.length !== 1 ? "s" : ""} stored.</p>
+        </div>
+      </MotionDiv>
+
+      {/* Category filter */}
+      {items.length > 0 && (
+        <div className="flex gap-2 flex-wrap mb-7">
+          <button onClick={() => setFilterCat("all")}
+            className="px-3.5 py-1.5 rounded-full text-xs font-medium transition-all"
+            style={{ backgroundColor: filterCat === "all" ? "#7B9E87" : "#F0EBE3", color: filterCat === "all" ? "white" : "#8C8579" }}>
+            All ({items.length})
+          </button>
+          {CATEGORIES.filter(c => items.some(i => i.category === c.value)).map(c => (
+            <button key={c.value} onClick={() => setFilterCat(c.value)}
+              className="px-3.5 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{ backgroundColor: filterCat === c.value ? c.color : "#F0EBE3", color: filterCat === c.value ? "white" : "#8C8579" }}>
+              {c.label} ({items.filter(i => i.category === c.value).length})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Items grid */}
+      <div className="grid md:grid-cols-2 gap-4 mb-8">
+        <AnimatePresence>
+          {filtered.map((item, i) => {
+            const cat = getCat(item.category);
+            const CatIcon = cat.icon;
+            return (
+              <MotionDiv key={item.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ delay: i * 0.04 }} className="rounded-2xl p-6"
+                style={{ backgroundColor: "white", border: "1px solid #E8E3DC", boxShadow: "0 2px 16px rgba(0,0,0,0.04)" }}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat.color}15` }}>
+                    <CatIcon className="w-4 h-4" style={{ color: cat.color }} />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3 h-3" style={{ color: "#C4BEB6" }} />
+                    <button onClick={() => handleDelete(item.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" style={{ color: "#C4BEB6" }}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <h3 className="font-medium mb-1 text-sm" style={{ color: "#2D2926" }}>{item.title}</h3>
+                {item.description && <p className="text-xs mb-2" style={{ color: "#8C8579" }}>{item.description}</p>}
+                {item.unlock_condition && (
+                  <p className="text-xs px-2.5 py-1 rounded-lg mt-2" style={{ backgroundColor: "#F5F1EC", color: "#8C8579", fontStyle: "italic" }}>
+                    🔓 {item.unlock_condition}
+                  </p>
+                )}
+                {item.file_url && (
+                  <a href={item.file_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs mt-3 transition-opacity hover:opacity-70"
+                    style={{ color: "#7B9E87" }}>
+                    <FileText className="w-3.5 h-3.5" /> View file
+                  </a>
+                )}
+              </MotionDiv>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {items.length === 0 && !showForm && (
+        <div className="text-center py-16">
+          <Lock className="w-10 h-10 mx-auto mb-4" style={{ color: "#C4BEB6" }} />
+          <p className="font-serif text-xl mb-2" style={{ color: "#8C8579" }}>Your vault is empty</p>
+          <p className="text-sm" style={{ color: "#A8A09A" }}>Upload documents, photos, and messages for your loved ones.</p>
+        </div>
+      )}
+
+      {/* Add form */}
+      <AnimatePresence>
+        {showForm && (
+          <MotionDiv initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="rounded-2xl p-8 mb-6"
+            style={{ backgroundColor: "white", border: "1px solid #E8E3DC", boxShadow: "0 2px 20px rgba(0,0,0,0.06)" }}>
+            <h3 className="font-serif text-xl mb-6" style={{ color: "#2D2926" }}>Add vault item</h3>
+            <div className="grid md:grid-cols-2 gap-x-6">
+              <div className="mb-4">
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A453F" }}>Title</label>
+                <input className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                  style={{ backgroundColor: "#F5F1EC", border: "1px solid #E8E3DC", color: "#2D2926" }}
+                  value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Property deed" />
+              </div>
+              <div className="mb-4">
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A453F" }}>Category</label>
+                <select className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                  style={{ backgroundColor: "#F5F1EC", border: "1px solid #E8E3DC", color: "#2D2926" }}
+                  value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A453F" }}>Description</label>
+              <textarea className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ backgroundColor: "#F5F1EC", border: "1px solid #E8E3DC", color: "#2D2926", minHeight: "80px" }}
+                value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                placeholder="Brief description of this item…" />
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-medium mb-1.5" style={{ color: "#4A453F" }}>Reveal condition (optional)</label>
+              <input className="w-full px-4 py-3 rounded-xl text-sm outline-none"
+                style={{ backgroundColor: "#F5F1EC", border: "1px solid #E8E3DC", color: "#2D2926" }}
+                value={form.unlock_condition} onChange={e => setForm({ ...form, unlock_condition: e.target.value })}
+                placeholder="e.g. Open only after I have passed" />
+            </div>
+
+            {/* File upload */}
+            <div className="mb-6">
+              <label className="block text-xs font-medium mb-2" style={{ color: "#4A453F" }}>Attach a file (optional)</label>
+              <div
+                onClick={() => fileRef.current.click()}
+                className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all hover:border-sage"
+                style={{ borderColor: file ? "#7B9E87" : "#D4CFC8" }}>
+                <Upload className="w-6 h-6 mx-auto mb-2" style={{ color: file ? "#7B9E87" : "#C4BEB6" }} />
+                <p className="text-sm" style={{ color: file ? "#4A7A5A" : "#8C8579" }}>
+                  {file ? file.name : "Click to upload"}
+                </p>
+                <input ref={fileRef} type="file" className="hidden" onChange={e => setFile(e.target.files[0])} />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={handleSave} disabled={saving || uploading}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-medium"
+                style={{ background: "linear-gradient(135deg, #7B9E87, #4A7A5A)" }}>
+                <Check className="w-4 h-4" /> {uploading ? "Uploading…" : saving ? "Saving…" : "Save to Vault"}
+              </button>
+              <button onClick={() => { setShowForm(false); setForm(EMPTY); setFile(null); }}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm"
+                style={{ backgroundColor: "#F5F1EC", color: "#8C8579" }}>
+                <X className="w-4 h-4" /> Cancel
+              </button>
+            </div>
+          </MotionDiv>
+        )}
+      </AnimatePresence>
+
+      {!showForm && (
+        <button onClick={() => setShowForm(true)}
+          className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-white text-sm font-medium transition-all hover:opacity-90"
+          style={{ background: "linear-gradient(135deg, #7B9E87, #4A7A5A)", boxShadow: "0 4px 16px rgba(123,158,135,0.3)" }}>
+          <Plus className="w-4 h-4" /> Add to Vault
+        </button>
+      )}
+    </div>
+  );
+}
