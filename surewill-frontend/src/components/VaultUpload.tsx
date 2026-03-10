@@ -156,13 +156,29 @@ const VaultUpload: React.FC<{
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
-      const signingKeypair = sodium.crypto_sign_keypair();
+      // --- NEW IDENTITY BINDING LOGIC ---
+      const privateKeyHex = sessionStorage.getItem("surewill_identity_key");
+
+      if (!privateKeyHex) {
+        throw new Error(
+          "Cryptographic Identity is missing! Please log in again.",
+        );
+      }
+
+      const privateKey = sodium.from_hex(privateKeyHex);
+
+      // In Libsodium, the 64-byte private key contains the 32-byte seed in the first half.
+      // I'm extracting the seed here to reconstruct that keypair
+      const seed = privateKey.slice(0, 32);
+      const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
+
+      // This will sign the asset to the user's true identity
       const signature = sodium.crypto_sign_detached(
         fileHash,
-        signingKeypair.privateKey,
+        identityKeypair.privateKey,
       );
 
-      // Upload to Backend
+      // sending it to the backend
       setStatusMsg("Uploading to Secure Vault...");
       const res = await fetch("/api/vault/upload", {
         method: "POST",
@@ -176,7 +192,7 @@ const VaultUpload: React.FC<{
           totalShards: nTotal,
           fileHash: fileHash,
           signature: sodium.to_hex(signature),
-          publicKey: sodium.to_hex(signingKeypair.publicKey),
+          publicKey: sodium.to_hex(identityKeypair.publicKey), // this uses sodium to safely send the public key
           fileName: form.title || file.name,
           fileType: file.type,
           fileSize: file.size,
@@ -197,8 +213,11 @@ const VaultUpload: React.FC<{
         const data = await res.json();
         setStatusMsg(data.error || "Upload failed.");
       }
-    } catch (err) {
-      setStatusMsg("A critical error occurred during encryption.");
+    } catch (err: any) {
+      console.error(err);
+      setStatusMsg(
+        err.message || "A critical error occurred during encryption.",
+      );
     }
     setUploading(false);
   };

@@ -9,16 +9,24 @@ import {
   ArrowRight,
   ArrowLeft,
   CheckCircle,
+  AlertCircle,
 } from "lucide-react";
+import _sodium from "libsodium-wrappers";
 
 const MotionDiv = motion.div;
 
-export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
+export const Auth = ({
+  setUserId,
+  onSwitchToHeir,
+}: {
+  setUserId: (id: string) => void;
+  onSwitchToHeir: () => void;
+}) => {
   const [mode, setMode] = useState<"login" | "register" | "forgot" | "otp">(
     "login",
   );
 
-  //Form States
+  // Form States
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -44,19 +52,64 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
     setSuccess("");
     setLoading(true);
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otp.trim();
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (
+      (mode === "login" || mode === "register" || mode === "forgot") &&
+      !emailRegex.test(cleanEmail)
+    ) {
+      setError("Please enter a valid email address.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      let publicKeyHex = "";
+      let privateKeyHex = "";
+
+      // This is where the cryptographic identity binding happens
+      if (mode === "login" || mode === "register") {
+        await _sodium.ready;
+        const sodium = _sodium;
+
+        // Using the email as salt
+        // and the password to deterministically derive the exact same seed every time.
+        const saltStr = cleanEmail.padEnd(16, " ").slice(0, 16);
+        const salt = sodium.from_string(saltStr);
+
+        const seed = sodium.crypto_pwhash(
+          sodium.crypto_sign_SEEDBYTES,
+          password,
+          salt,
+          sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE,
+          sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
+          sodium.crypto_pwhash_ALG_ARGON2ID13,
+        );
+
+        // generating the user's permanent identity keypair
+        const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
+        publicKeyHex = sodium.to_hex(identityKeypair.publicKey);
+        privateKeyHex = sodium.to_hex(identityKeypair.privateKey);
+      }
+
       if (mode === "login") {
         const res = await fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email: cleanEmail, password }),
         });
 
         const data = await res.json();
 
         if (data.userId) {
+          // this basically holds the key for the duration of the user's session
+          sessionStorage.setItem("surewill_identity_key", privateKeyHex);
+
           setTempUserId(data.userId);
           setMode("otp");
+          setSuccess("Verification code sent to your email.");
         } else {
           setError(data.error || "Invalid login credentials.");
         }
@@ -64,14 +117,20 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
         const res = await fetch("/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, email, password }),
+          // sends the public key to the backend to map it to the user
+          body: JSON.stringify({
+            username,
+            email: cleanEmail,
+            password,
+            publicKey: publicKeyHex,
+          }),
         });
 
         const data = await res.json();
 
         if (res.ok) {
           setSuccess("Registered! You may log in.");
-          setMode("login");
+          setTimeout(() => setMode("login"), 1500);
         } else {
           setError(data.error || "Registration failed.");
         }
@@ -79,8 +138,9 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
         const res = await fetch("/api/otp/verify-otp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: tempUserId, otp }),
+          body: JSON.stringify({ userId: tempUserId, otp: cleanOtp }),
         });
+
         if (res.ok) {
           setUserId(tempUserId);
         } else {
@@ -90,7 +150,7 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
         const res = await fetch("/api/forgot-password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email: cleanEmail }),
         });
 
         if (res.ok) {
@@ -100,7 +160,7 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
         }
       }
     } catch (err) {
-      setError("Failed to connect to the server.");
+      setError("Failed to connect to the secure server.");
     }
     setLoading(false);
   };
@@ -118,7 +178,13 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
             SureWill
           </span>
         </div>
-        <div>
+        <div className="flex items-center gap-6">
+          <button
+            onClick={onSwitchToHeir}
+            className="text-sm font-medium text-[#8C8579] hover:text-[#4A7A5A] transition-colors"
+          >
+            Claim an Asset
+          </button>
           {mode === "login" ? (
             <button
               onClick={() => setMode("register")}
@@ -198,8 +264,8 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
 
                 {/* Status Messages */}
                 {error && (
-                  <div className="mb-4 p-3 rounded-xl text-xs font-medium bg-red-50 text-red-600 border border-red-100">
-                    {error}
+                  <div className="mb-4 p-3 rounded-xl text-xs font-medium bg-red-50 text-red-600 border border-red-100 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
                   </div>
                 )}
                 {success && (
@@ -211,7 +277,7 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
                       border: "1px solid #B8D4BF",
                     }}
                   >
-                    <CheckCircle className="w-4 h-4" /> {success}
+                    <CheckCircle className="w-4 h-4 flex-shrink-0" /> {success}
                   </div>
                 )}
 
@@ -303,7 +369,7 @@ export const Auth = ({ setUserId }: { setUserId: (id: string) => void }) => {
                   }}
                 >
                   {loading ? (
-                    "Processing..."
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
                       {mode === "login" && "Unlock Vault"}

@@ -4,7 +4,6 @@ import { Plus, Trash2, Users, Check, X, Shield, Key } from "lucide-react";
 
 const MotionDiv = motion.div;
 
-// Premium Base44 Color Mapping
 const relationshipColors: Record<string, any> = {
   spouse: { bg: "#FDF3F3", text: "#C07070", border: "#F5C6C6" },
   child: { bg: "#F0F5F2", text: "#4A7A5A", border: "#B8D4BF" },
