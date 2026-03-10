@@ -30,6 +30,56 @@ const app = express();
 // Gets the port from my .env file, or just use 5050 if it's not set.
 const PORT = process.env.PORT || 5050;
 
+const SHARD_KEY = process.env.SHARD_KEY;
+const AES_ALGO = "aes-256-gcm";
+
+console.log(`Shard Key Loaded! ${SHARD_KEY?.length}`);
+
+/**
+ * This method encrypts a plain hex shard using the server master key
+ */
+function encryptionAtRest(text: string): string {
+  const key = SHARD_KEY?.trim();
+
+  if (!key || key.length !== 32)
+    throw new Error("Invalid Shard Encryption Key in .env");
+
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(AES_ALGO, Buffer.from(key), iv);
+
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  const authTag = cipher.getAuthTag().toString("hex");
+
+  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+}
+
+/**
+ * This method will then decrypt the shard stored at rest back into its plain hex format.
+ */
+function decryptionAtRest(encryptedData: string): string {
+  const key = SHARD_KEY?.trim();
+
+  if (!key || key.length !== 32) {
+    throw new Error(
+      `Invalid Shard Encryption Key. Expected 32 chars, got ${key?.length || 0}`,
+    );
+  }
+
+  const [ivHex, authTagHex, encryptedText] = encryptedData.split(":");
+  const decipher = crypto.createDecipheriv(
+    AES_ALGO,
+    Buffer.from(key!),
+    Buffer.from(ivHex, "hex"),
+  );
+
+  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+
+  let decrypted = decipher.update(encryptedText, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
 // Adding some security headers with helmet() to protect against common web vulnerabilities.
 app.use(helmet());
 app.use(
@@ -106,7 +156,7 @@ async function sendOTPToEmail(email: string, otp: string) {
     html: `<h3>Security Verification</h3><p>Your code is: <b>${otp}</b></p>`,
   });
 
-  // If using Ethereal, log the preview URL. Otherwise, just log the message ID.
+  // log the preview URL, otherwise, just log the message ID.
   if (
     "host" in transporter.options &&
     transporter.options.host === "smtp.ethereal.email"
@@ -413,15 +463,17 @@ app.post("/api/vault/upload", async (req, res) => {
     fileName,
     fileType,
     fileSize,
+    ...rest
   } = req.body;
 
   try {
+    const encryptedShards = shards.map((s: string) => encryptionAtRest(s));
     // I'm creating a new document in my 'assets' collection with all the file details.
     const newAsset = new Asset({
       userId,
       encrypted_data: encryptedData,
       nonce,
-      shards: shards,
+      shards: encryptedShards,
       threshold: threshold,
       total_shards: totalShards,
       file_hash: fileHash,
@@ -430,6 +482,7 @@ app.post("/api/vault/upload", async (req, res) => {
       file_name: fileName,
       file_type: fileType,
       file_size: fileSize,
+      ...rest,
     });
 
     await newAsset.save();
@@ -441,6 +494,7 @@ app.post("/api/vault/upload", async (req, res) => {
       .status(201)
       .json({ message: "Asset Uploaded Successfully", asset: newAsset });
   } catch (err) {
+    console.error("[UPLOAD ERROR]:", err);
     res.status(500).json({ error: "Error uploading asset." });
   }
 });
@@ -499,7 +553,7 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
     // Security Point: The shard will only be released if the Dead Man's Switch has been triggered
     if (beneficiary && beneficiary.access_granted) {
       // Get the first shard remaining in the asset as the system shard
-      systemShard = asset.shards[0];
+      systemShard = decryptionAtRest(asset.shards[0]);
 
       console.log(
         `[Authenticated] Dead Man's Switch triggered. Releasing System Shard for Asset: ${assetId}`,
@@ -629,12 +683,21 @@ app.get("/api/beneficiary/claims/:email", async (req, res) => {
       return res.status(404).json({ error: "No beneficiary found." });
     }
 
-    // This is a security check. It only returns the shards if the Dead Man's Switch has been triggered
     if (!beneficiary.access_granted) {
       return res.status(403).json({
         error: "Access Denied. The vault is still locked by the owner.",
       });
     }
+
+    const decryptedClaims = beneficiary.assigned_assets.map((claim: any) => ({
+      assetId: claim.assetId,
+      shard: decryptionAtRest(claim.shard),
+    }));
+
+    res.json({
+      fullName: beneficiary.full_name,
+      claims: decryptedClaims,
+    });
 
     // Return the list of assets and the specific shards the heir has
     res.json({
@@ -642,6 +705,7 @@ app.get("/api/beneficiary/claims/:email", async (req, res) => {
       claims: beneficiary.assigned_assets, // This one returns the db array of assetId and the shar
     });
   } catch (err) {
+    console.error("Claims Error:", err);
     res.status(500).json({ error: "Server error getting the claims of user." });
   }
 });
