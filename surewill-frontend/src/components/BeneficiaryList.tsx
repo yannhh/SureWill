@@ -14,7 +14,14 @@ const relationshipColors: Record<string, any> = {
   other: { bg: "#F5F5F5", text: "#707070", border: "#D0D0D0" },
 };
 
-const EMPTY = { full_name: "", relationship: "child", email: "", notes: "" };
+// ADDED 'phone' to the empty state
+const EMPTY = {
+  full_name: "",
+  relationship: "child",
+  email: "",
+  phone: "",
+  notes: "",
+};
 
 const BeneficiaryList: React.FC<{
   userId: string;
@@ -25,13 +32,11 @@ const BeneficiaryList: React.FC<{
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Form states
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
-  // Assignment states
   const [selectedAsset, setSelectedAsset] = useState("");
   const [selectedBeneficiary, setSelectedBeneficiary] = useState("");
   const [assignStatus, setAssignStatus] = useState("");
@@ -64,10 +69,12 @@ const BeneficiaryList: React.FC<{
       const res = await fetch("/api/beneficiaries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // ADDED 'phone' to the backend payload
         body: JSON.stringify({
           userId,
           fullName: form.full_name,
           email: form.email,
+          phone: form.phone,
           relationship: form.relationship,
         }),
       });
@@ -110,7 +117,7 @@ const BeneficiaryList: React.FC<{
 
       if (res.ok) {
         setAssignStatus("Success! Cryptographic shard securely assigned.");
-        fetchData(); // Refresh data to update shard counts
+        fetchData();
         setSelectedAsset("");
         setSelectedBeneficiary("");
         setTimeout(() => setAssignStatus(""), 4000);
@@ -127,8 +134,6 @@ const BeneficiaryList: React.FC<{
     alert(
       "Just like the Vault, we need to add a DELETE route to index.ts before this button works!",
     );
-    // await fetch(`/api/beneficiaries/${benId}`, { method: "DELETE" });
-    // fetchData();
   };
 
   if (loading)
@@ -143,7 +148,6 @@ const BeneficiaryList: React.FC<{
 
   return (
     <div className="w-full">
-      {/* Header */}
       <MotionDiv
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -167,7 +171,6 @@ const BeneficiaryList: React.FC<{
         </p>
       </MotionDiv>
 
-      {/* Beneficiary Cards */}
       <AnimatePresence>
         {beneficiaries.map((b, i) => {
           const colors =
@@ -228,8 +231,14 @@ const BeneficiaryList: React.FC<{
                         {b.email}
                       </p>
                     )}
-
-                    {/* Display assigned shards count */}
+                    {b.phone_number && (
+                      <p
+                        className="text-xs mt-0.5"
+                        style={{ color: "#8C8579" }}
+                      >
+                        MFA: {b.phone_number}
+                      </p>
+                    )}
                     {b.assigned_assets && b.assigned_assets.length > 0 && (
                       <div
                         className="mt-3 flex items-center gap-1.5 text-xs font-medium"
@@ -242,7 +251,6 @@ const BeneficiaryList: React.FC<{
                     )}
                   </div>
                 </div>
-
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleDelete(b._id)}
@@ -289,7 +297,6 @@ const BeneficiaryList: React.FC<{
         </div>
       )}
 
-      {/* Add Beneficiary Form */}
       <AnimatePresence>
         {showForm && (
           <MotionDiv
@@ -309,7 +316,6 @@ const BeneficiaryList: React.FC<{
             >
               Register Heir
             </h3>
-
             <div className="grid md:grid-cols-2 gap-x-6">
               <div className="mb-4">
                 <label
@@ -333,8 +339,44 @@ const BeneficiaryList: React.FC<{
                   placeholder="e.g. Emma Grace Smith"
                 />
               </div>
-
               <div className="mb-4">
+                <label
+                  className="block text-xs font-medium mb-1.5"
+                  style={{ color: "#4A453F" }}
+                >
+                  Relationship
+                </label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-[#7B9E87]/30"
+                  style={{
+                    backgroundColor: "#F5F1EC",
+                    border: "1px solid #E8E3DC",
+                    color: "#2D2926",
+                  }}
+                  value={form.relationship}
+                  onChange={(e) =>
+                    setForm({ ...form, relationship: e.target.value })
+                  }
+                >
+                  {[
+                    "spouse",
+                    "child",
+                    "parent",
+                    "sibling",
+                    "friend",
+                    "charity",
+                    "other",
+                  ].map((r) => (
+                    <option key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-x-6 mb-6">
+              <div className="mb-4 md:mb-0">
                 <label
                   className="block text-xs font-medium mb-1.5"
                   style={{ color: "#4A453F" }}
@@ -351,44 +393,30 @@ const BeneficiaryList: React.FC<{
                   }}
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="emma.smith@example.com"
+                  placeholder="emma@example.com"
                 />
               </div>
-            </div>
-
-            <div className="mb-6">
-              <label
-                className="block text-xs font-medium mb-1.5"
-                style={{ color: "#4A453F" }}
-              >
-                Relationship
-              </label>
-              <select
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-[#7B9E87]/30"
-                style={{
-                  backgroundColor: "#F5F1EC",
-                  border: "1px solid #E8E3DC",
-                  color: "#2D2926",
-                }}
-                value={form.relationship}
-                onChange={(e) =>
-                  setForm({ ...form, relationship: e.target.value })
-                }
-              >
-                {[
-                  "spouse",
-                  "child",
-                  "parent",
-                  "sibling",
-                  "friend",
-                  "charity",
-                  "other",
-                ].map((r) => (
-                  <option key={r} value={r}>
-                    {r.charAt(0).toUpperCase() + r.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <div>
+                {/* ADDED: Mobile phone input field */}
+                <label
+                  className="block text-xs font-medium mb-1.5"
+                  style={{ color: "#4A453F" }}
+                >
+                  Mobile Phone Number
+                </label>
+                <input
+                  type="tel"
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-[#7B9E87]/30"
+                  style={{
+                    backgroundColor: "#F5F1EC",
+                    border: "1px solid #E8E3DC",
+                    color: "#2D2926",
+                  }}
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="+1 (555) 000-0000"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 mt-2">
@@ -423,7 +451,6 @@ const BeneficiaryList: React.FC<{
         )}
       </AnimatePresence>
 
-      {/* Add button */}
       {!showForm && (
         <button
           onClick={() => {
@@ -440,7 +467,6 @@ const BeneficiaryList: React.FC<{
         </button>
       )}
 
-      {/* SECURE ASSET DISTRIBUTION SECTION */}
       {beneficiaries.length > 0 && assets.length > 0 && (
         <MotionDiv
           initial={{ opacity: 0 }}
@@ -460,7 +486,6 @@ const BeneficiaryList: React.FC<{
               </p>
             </div>
           </div>
-
           <div
             className="rounded-3xl p-8 bg-white border border-[#E8E3DC]"
             style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.04)" }}
@@ -491,7 +516,6 @@ const BeneficiaryList: React.FC<{
                   ))}
                 </select>
               </div>
-
               <div>
                 <label
                   className="block text-xs font-medium mb-1.5"
@@ -518,7 +542,6 @@ const BeneficiaryList: React.FC<{
                 </select>
               </div>
             </div>
-
             {assignStatus && (
               <div
                 className="mb-6 p-3 rounded-xl text-xs font-medium text-center"
@@ -538,7 +561,6 @@ const BeneficiaryList: React.FC<{
                 {assignStatus}
               </div>
             )}
-
             <button
               onClick={handleAssignAsset}
               disabled={assigning}

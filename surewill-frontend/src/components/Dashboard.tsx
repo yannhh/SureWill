@@ -10,13 +10,10 @@ import {
   LogOut,
   Menu,
   X,
-  Key,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import VaultUpload from "./VaultUpload";
 import BeneficiaryList from "./BeneficiaryList";
-import VaultUnlock from "./VaultUnlock";
-import HeirDashboard from "./HeirDashboard";
 
 const MotionDiv = motion.div;
 
@@ -34,10 +31,6 @@ export const Dashboard = ({
   const [heirCount, setHeirCount] = useState(0);
   const [assetCount, setAssetCount] = useState(0);
   const [assetRefresh, setAssetRefresh] = useState(0);
-  const [activeClaim, setActiveClaim] = useState<{
-    id: string;
-    shard: string;
-  } | null>(null);
 
   const fetchStats = async () => {
     try {
@@ -84,7 +77,6 @@ export const Dashboard = ({
     { name: "Overview", tab: "overview", icon: Shield },
     { name: "My Vault", tab: "vault", icon: Lock },
     { name: "Beneficiaries", tab: "beneficiaries", icon: Users },
-    { name: "Claim Portal", tab: "heir", icon: Key },
   ];
 
   const cards = [
@@ -101,13 +93,6 @@ export const Dashboard = ({
       icon: Users,
       tab: "beneficiaries",
       color: "#C9A96E",
-    },
-    {
-      title: "Claim Portal",
-      desc: "Execute legacy unlocking",
-      icon: Key,
-      tab: "heir",
-      color: "#4A7A5A",
     },
   ];
 
@@ -292,7 +277,7 @@ export const Dashboard = ({
             </div>
 
             {/* Navigation Cards */}
-            <div className="grid md:grid-cols-3 gap-5 mb-10">
+            <div className="grid md:grid-cols-2 gap-5 mb-10">
               {cards.map((card, i) => (
                 <button
                   key={card.tab}
@@ -368,40 +353,6 @@ export const Dashboard = ({
               onBeneficiaryAdded={fetchStats}
               assetRefresh={assetRefresh}
             />
-          </MotionDiv>
-        )}
-
-        {/* VIEW: HEIR CLAIM PORTAL */}
-        {activeTab === "heir" && (
-          <MotionDiv
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <HeirDashboard
-              onSelectAsset={(id, shard) => setActiveClaim({ id, shard })}
-            />
-
-            {/* The Vault Unlock logic renders right below it if a claim is selected */}
-            {activeClaim && (
-              <MotionDiv
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="mt-8 pt-8 border-t border-[#E8E3DC]"
-              >
-                <VaultUnlock assetId={activeClaim.id} />
-                <div className="mt-4 p-4 rounded-xl bg-[#F0F5F2] border border-[#B8D4BF]">
-                  <p className="text-xs text-[#2D2926] mb-1">
-                    <strong>Your Shard A:</strong>
-                  </p>
-                  <code className="text-[10px] break-all text-[#4A7A5A] select-all">
-                    {activeClaim.shard}
-                  </code>
-                  <p className="text-[10px] text-[#8C8579] italic mt-2">
-                    (Copy this, then paste it into the unlock box above)
-                  </p>
-                </div>
-              </MotionDiv>
-            )}
           </MotionDiv>
         )}
       </main>

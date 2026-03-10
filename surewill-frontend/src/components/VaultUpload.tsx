@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { split } from "shamir-secret-sharing";
-import _sodium from "libsodium-wrappers";
+import _sodium from "libsodium-wrappers-sumo";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lock,

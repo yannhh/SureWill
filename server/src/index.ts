@@ -162,7 +162,7 @@ async function sendResetEmail(email: string, resetURL: string) {
 // This is my endpoint for when a new user signs up.
 app.post("/api/register", async (req, res) => {
   // I'm getting the user's details from the body of the POST request.
-  const { username, email, password } = req.body;
+  const { username, email, password, publicKey } = req.body;
 
   try {
     // I have to make sure the crypto library is loaded and ready before I use it.
@@ -180,6 +180,7 @@ app.post("/api/register", async (req, res) => {
       username,
       email,
       password_hash: hashedPassword,
+      public_key: publicKey,
     });
     await newUser.save();
 
@@ -240,6 +241,67 @@ app.post("/api/login", async (req, res) => {
     res
       .status(500)
       .json({ error: "Login failed. Could not send verification email." });
+  }
+});
+
+// Requesting SMS OTP for the heir portal
+// This accommodates the heir portal access
+app.post("/api/beneficiary/request-otp", async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const beneficiary = await Beneficiary.findOne({ email });
+
+    if (!beneficiary)
+      return res.status(404).json({ error: "Beneficiary not found." });
+
+    if (!beneficiary.access_granted) {
+      return res.status(403).json({
+        error: "Access Denied. The vault is still locked by the owner.",
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    beneficiary.otp_code = otp;
+    beneficiary.otp_expires = new Date(Date.now() + 10 * 60000); // 10 minutes
+    await beneficiary.save();
+
+    // Mock TWILIO SMS integration (not production yet)
+    // production would cost money, this should be enough for the dissertation
+    console.log(`\n[TWILIO MOCK SMS] Sent to ${beneficiary.phone_number}:`);
+    console.log(`"Your SureWill Heir Portal security code is: ${otp}"\n`);
+
+    res.json({ message: "OTP has been sent to your phne." });
+  } catch (err) {
+    res.status(500).json({ error: "Error sending SMS." });
+  }
+});
+
+app.post("/api/beneficiary/claims", async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+    const beneficiary = await Beneficiary.findOne({ email });
+
+    // Verify OTP matches and isn't expired yet
+    if (
+      !beneficiary ||
+      beneficiary.otp_code !== otp ||
+      new Date() > (beneficiary.otp_expires || 0)
+    ) {
+      return res.status(401).json({ error: "Invalid OTP!" });
+    }
+
+    // Clear OTP so it wont be reused ever
+    beneficiary.otp_code = undefined;
+    await beneficiary.save();
+
+    res.json({
+      fullName: beneficiary.full_name,
+      claims: beneficiary.assigned_assets,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error getting claims." });
   }
 });
 
@@ -471,7 +533,7 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
 
 // This endpoint allows a user to add a beneficiary to their account.
 app.post("/api/beneficiaries", async (req, res) => {
-  const { userId, fullName, email, relationship } = req.body;
+  const { userId, fullName, email, relationship, phone } = req.body;
 
   try {
     // I'm creating a new beneficiary document and linking it to the user.
@@ -480,6 +542,7 @@ app.post("/api/beneficiaries", async (req, res) => {
       full_name: fullName,
       email,
       relationship,
+      phone_number: phone,
     });
 
     await newBeneficiary.save();

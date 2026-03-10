@@ -34,6 +34,9 @@ const benefeciarySchema = new Schema({
   full_name: String,
   email: String,
   relationship: String,
+  phone_number: String,
+  otp_code: { type: String },
+  otp_expires: { type: Date },
   access_granted: { type: Boolean, default: false },
   assigned_assets: [
     {

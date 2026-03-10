@@ -11,7 +11,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
-import _sodium from "libsodium-wrappers";
+import _sodium from "libsodium-wrappers-sumo";
 
 const MotionDiv = motion.div;
 
@@ -50,32 +50,35 @@ export const Auth = ({
   const handleAction = async () => {
     setError("");
     setSuccess("");
-    setLoading(true);
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
 
+    // 1. INPUT VALIDATION (Prevents Cryptography Crashes!)
+    if (mode === "register" && !username.trim()) {
+      return setError("Please enter a full name or username.");
+    }
+    if ((mode === "login" || mode === "register") && !password) {
+      return setError("Please enter a password.");
+    }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (
       (mode === "login" || mode === "register" || mode === "forgot") &&
       !emailRegex.test(cleanEmail)
     ) {
-      setError("Please enter a valid email address.");
-      setLoading(false);
-      return;
+      return setError("Please enter a valid email address.");
     }
+
+    setLoading(true);
 
     try {
       let publicKeyHex = "";
       let privateKeyHex = "";
 
-      // This is where the cryptographic identity binding happens
       if (mode === "login" || mode === "register") {
         await _sodium.ready;
         const sodium = _sodium;
 
-        // Using the email as salt
-        // and the password to deterministically derive the exact same seed every time.
         const saltStr = cleanEmail.padEnd(16, " ").slice(0, 16);
         const salt = sodium.from_string(saltStr);
 
@@ -88,25 +91,52 @@ export const Auth = ({
           sodium.crypto_pwhash_ALG_ARGON2ID13,
         );
 
-        // generating the user's permanent identity keypair
         const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
         publicKeyHex = sodium.to_hex(identityKeypair.publicKey);
         privateKeyHex = sodium.to_hex(identityKeypair.privateKey);
       }
 
+      let endpoint = "";
+      let bodyPayload: any = {};
+
       if (mode === "login") {
-        const res = await fetch("/api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: cleanEmail, password }),
-        });
+        endpoint = "/api/login";
+        bodyPayload = { email: cleanEmail, password };
+      } else if (mode === "register") {
+        endpoint = "/api/register";
+        bodyPayload = {
+          username,
+          email: cleanEmail,
+          password,
+          publicKey: publicKeyHex,
+        };
+      } else if (mode === "otp") {
+        endpoint = "/api/otp/verify-otp";
+        bodyPayload = { userId: tempUserId, otp: cleanOtp };
+      } else if (mode === "forgot") {
+        endpoint = "/api/forgot-password";
+        bodyPayload = { email: cleanEmail };
+      }
 
-        const data = await res.json();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyPayload),
+      });
 
+      // 2. CRASH PREVENTION: Check if the backend proxy returned HTML instead of JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          "Backend server is offline! Please ensure your Node.js backend is running.",
+        );
+      }
+
+      const data = await res.json();
+
+      if (mode === "login") {
         if (data.userId) {
-          // this basically holds the key for the duration of the user's session
           sessionStorage.setItem("surewill_identity_key", privateKeyHex);
-
           setTempUserId(data.userId);
           setMode("otp");
           setSuccess("Verification code sent to your email.");
@@ -114,20 +144,6 @@ export const Auth = ({
           setError(data.error || "Invalid login credentials.");
         }
       } else if (mode === "register") {
-        const res = await fetch("/api/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // sends the public key to the backend to map it to the user
-          body: JSON.stringify({
-            username,
-            email: cleanEmail,
-            password,
-            publicKey: publicKeyHex,
-          }),
-        });
-
-        const data = await res.json();
-
         if (res.ok) {
           setSuccess("Registered! You may log in.");
           setTimeout(() => setMode("login"), 1500);
@@ -135,32 +151,22 @@ export const Auth = ({
           setError(data.error || "Registration failed.");
         }
       } else if (mode === "otp") {
-        const res = await fetch("/api/otp/verify-otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: tempUserId, otp: cleanOtp }),
-        });
-
         if (res.ok) {
           setUserId(tempUserId);
         } else {
           setError("Invalid or expired code.");
         }
       } else if (mode === "forgot") {
-        const res = await fetch("/api/forgot-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: cleanEmail }),
-        });
-
         if (res.ok) {
           setSuccess("Password reset link has been sent to your email.");
         } else {
           setError("Failed to send password reset link.");
         }
       }
-    } catch (err) {
-      setError("Failed to connect to the secure server.");
+    } catch (err: any) {
+      console.error("Auth Error:", err);
+      // This will now print the EXACT error to your UI instead of a generic message
+      setError(err.message || "An unexpected error occurred.");
     }
     setLoading(false);
   };
