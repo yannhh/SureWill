@@ -100,7 +100,7 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
   };
 
   const handleUnlock = async () => {
-    // 1. Safeguard the ID (Catches the assetId/id naming mismatch)
+    // Using this targetId to make sure I have the right database reference, even if object names are slightly different between the frontend and backend response.
     const targetId = activeClaim?.id || (activeClaim as any)?.assetId;
     if (!targetId || targetId === "undefined") {
       return setStatus({
@@ -116,47 +116,60 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
     });
 
     try {
-      // 2. Fetch from the secure backend
+      // This fetches the secure download endpoint to get the encrypted file data and system shard.
       const res = await fetch(`/api/vault/download/${targetId}`);
       const asset = await res.json();
 
       if (!asset || asset.error)
         throw new Error(asset.error || "Failed to fetch asset.");
+
+      // If the owner leaves an unlock condition note, It will update and show it.
       if (asset.unlockCondition) setShowCondition(asset.unlockCondition);
 
+      // This is the Dead Man's Switch guard. If the monitor script hasn't triggered access_granted for the heirs, then the backend wont send the system shard.
       if (!asset.systemShard) {
         throw new Error(
           "Access Denied: The system shard is still locked. The owner is currently active.",
         );
       }
 
-      // 3. Smart Cryptographic Reconstruction
+      // This preps the Cryptography
+      // This waits for libsodium to be loaded into the browser
       await _sodium.ready;
       const sodium = _sodium;
 
-      // Parse any extra shards the user pasted in the box (if any)
+      // Parses shards the user might have pasted (like other beneficiaries pasting in their shards) and cleaning up accidental spaces.
+      // This ensures that the input is correct and matches the actual shard the Shamir's Secret is expecting.
       const extraShards = shardsInput
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s !== "");
 
-      // Calculate total: User's Primary Shard (1) + System Shard (1) + Any extra pasted shards
+      // then Calculates the total shards, 1 for the system (by default) and 1 for the heir, + any extras if there are
       const totalCollected = 2 + extraShards.length;
 
+      // This checks the threshold, If the user hasn't given enough pieces for the k value of the Shamir's Secret Math, this stops them from continuing.
       if (totalCollected < asset.threshold) {
         throw new Error(
           `Threshold not met. This vault requires ${asset.threshold} total shards.`,
         );
       }
 
-      // 4. Combine Shards (AUTOMATICALLY includes their primary shard from React State!)
+      /**
+       * Reconstructing the master key
+       * This is the core mathematics part.
+       * I combine all fragments back into a single 32-byte key using Shamir's Secret Sharing.
+       */
       const masterKey = await combine([
         sodium.from_hex(activeClaim!.shard), // Auto-inject the Heir's primary shard
         sodium.from_hex(asset.systemShard), // Auto-inject the System shard
         ...extraShards.map((hex) => sodium.from_hex(hex)), // Add any additional shards they pasted
       ]);
 
-      // 5. Decryption
+      /**
+       * The Decryption
+       * Now that I have reconstructed the master key, I use Libsodium's secretbox to unlock the file data.
+       */
       const decryptedBytes = sodium.crypto_secretbox_open_easy(
         sodium.from_base64(asset.encrypted_data),
         sodium.from_base64(asset.nonce),
@@ -166,17 +179,27 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
       if (!decryptedBytes)
         throw new Error("Decryption failed. Invalid or tampered shard.");
 
-      // 6. Security Fix: Integrity & Identity Verification
+      /**
+       * This is the security identity check (Defense in Depth)
+       */
       setStatus({
         type: "info",
         msg: "Verifying File Integrity & Identity Binding...",
       });
 
+      /**
+       * Added this, because my decryptedBytes would always be expecting a different parse and gives errors.
+       * Browsers are picky about datatypes, so I force decryptedBytes to Uint8Array.
+       */
       const safeBuffer =
         decryptedBytes instanceof Uint8Array
           ? decryptedBytes
           : new Uint8Array(decryptedBytes as any);
 
+      /**
+       * Recalculating the SHA-256 hash of the decrypted file.
+       * Makes sure it wasn't modified in the database.
+       */
       const currentHashBuffer = await window.crypto.subtle.digest(
         "SHA-256",
         safeBuffer,
@@ -192,7 +215,10 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
         );
       }
 
-      // 7. Identity Fallback (Ensures we never get "incomplete input" on missing old keys)
+      /**
+       * Finally, verifying the digital signature.
+       * Proves that the owner's private key was used to sign the file hash during uploading.
+       */
       const publicKeyToVerify = asset.public_key || asset.ownerPublicKey;
       if (!publicKeyToVerify)
         throw new Error("Missing public key to verify signature.");
@@ -207,7 +233,10 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
         throw new Error("Forgery Detected! Signature mismatch.");
       }
 
-      // 8. Bulletproof Blob Construction
+      /**
+       * I'm turning the final clean bytes into a Binary Large Object (blob) here.
+       * So the browser can download it as a real file.
+       */
       const blob = new Blob([safeBuffer], {
         type: asset.file_type || "application/octet-stream",
       });
@@ -217,6 +246,8 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
       a.href = url;
       a.download = asset.file_name || "SureWill_Unlocked.bin";
       a.click();
+
+      // I revoke the URL after 1 second to clear browser memory.
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       setStatus({
@@ -272,7 +303,6 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
             style={{ boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }}
           >
             <AnimatePresence mode="wait">
-              {/* STEP 1: ENTER EMAIL */}
               {step === "email" && (
                 <MotionDiv
                   key="email"
@@ -320,7 +350,6 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
                 </MotionDiv>
               )}
 
-              {/* STEP 2: ENTER SMS OTP */}
               {step === "otp" && (
                 <MotionDiv
                   key="otp"
@@ -380,7 +409,6 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
                 </MotionDiv>
               )}
 
-              {/* STEP 3: LIST CLAIMS */}
               {step === "claims" && (
                 <MotionDiv
                   key="claims"

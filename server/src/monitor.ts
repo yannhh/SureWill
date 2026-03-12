@@ -7,8 +7,8 @@ dotenv.config();
 dbConnection();
 
 /**
- *  Sends the notification email to the beneficiary.
- *  This uses Ethereal, a mock service to for demonstration purposes.
+ * Im using Ethereal Mail to simulate the real-world notification. (Production SMTP has payments).
+ * SMTP email to tell the beneficiary that the user's assets have been released.
  */
 async function sendNotification(beneficiaryEmail: string, userName: string) {
   // Creating a test account
@@ -86,10 +86,11 @@ async function sendAckEmail(
 }
 
 /**
- * Backend Monitoring
- * This scans for users whose inactivity exceeds the set threshold and updates their status to "triggered".
- * Effectively calculating the time difference between the current time and the user's last active timestamp.
- *
+ * The core Heartbeat of SureWill! Which I configured to run every 10 seconds
+ * It finds two particular stages of inactivity.
+ * The first is the Threshold. If the user hasn't logged in for 1 minute, they are moved to pending
+ * The second is the Grace Period. If the user hasn't responded to the pending email which asks if they're still here,
+ * the vault will then be triggered and beneficiaries will have access_granted to true for all heirs assigned.
  */
 async function checkInactivity() {
   console.log("[Backend Monitoring] Checking users accounts for inactivity.");

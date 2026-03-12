@@ -1,5 +1,9 @@
 import mongoose, { Schema } from "mongoose";
 
+/**
+ * Store's basic user information.
+ * The public_key is most important in this schema. It's the ED25519 key I used to verify the file uploaded was actually signed by that specific user.
+ */
 const userSchema = new Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
@@ -13,6 +17,11 @@ const userSchema = new Schema({
   public_key: { type: String }, //Storing the user's digital signature key (Ed25519)
 });
 
+/**
+ * Represents the vault assets.
+ * I store the Shamir's Secret shards here as an array.
+ * file_hash and signature are my security layers to prove that the file is not tampered while sitting in the database.
+ */
 const assetsSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   encrypted_data: { type: String, required: true },
@@ -32,6 +41,10 @@ const assetsSchema = new Schema({
   public_key: { type: String, required: true },
 });
 
+/**
+ * These are the heirs of the users.
+ * The assigned_assets array is most important because it maps a specific beneficiary to a specific shard of a specific file.
+ */
 const benefeciarySchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   full_name: String,

@@ -36,7 +36,9 @@ const AES_ALGO = "aes-256-gcm";
 console.log(`Shard Key Loaded! ${SHARD_KEY?.length}`);
 
 /**
- * This method encrypts a plain hex shard using the server master key
+ * This is my encryption at rest.
+ * Even if someone is able to steal my database, the Shamir Shards are encrypted with AES-256 using a
+ * master key that only exists in my server's .env file (which I also configured to be a difficult password).
  */
 function encryptionAtRest(text: string): string {
   const key = SHARD_KEY?.trim();
@@ -327,6 +329,12 @@ app.post("/api/beneficiary/request-otp", async (req, res) => {
   }
 });
 
+/**
+ * This is the heir portal logic.
+ * I added a strict check here to ensure access_granted is true.
+ * This prevents the heir from skipping the line and getting their shard before the owner is actually gone.
+ * Basically, the Dead Man's Switch has to be triggered before they can claim.
+ */
 app.post("/api/beneficiary/claims", async (req, res) => {
   const { email, otp } = req.body;
 
@@ -455,7 +463,12 @@ app.post("/api/reset-password", async (req, res) => {
   }
 });
 
-// This endpoint handles uploading a new (simulated) encrypted asset to the user's vault.
+/**
+ * When a user uploads the file, I'm doing these:
+ * Their shards are encrypted before saving (which is the Encryption At Rest)
+ * I store the file metadata.
+ * I update their last_active timestamp so the Dead Man's Switch knows they are active and still present.
+ */
 app.post("/api/vault/upload", async (req, res) => {
   const {
     userId,
