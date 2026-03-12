@@ -51,10 +51,18 @@ export const Auth = ({
     setError("");
     setSuccess("");
 
+    /**
+     * Cleaning inputs here.
+     * Ensures that no accidental spaces dont break the cryptographic hashing later on.
+     */
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
 
-    // 1. INPUT VALIDATION (Prevents Cryptography Crashes!)
+    /**
+     * Input Validation
+     * Added checks to prevent the cryptography library from crashing.
+     * If it receives empty strings, it crashes on me.
+     */
     if (mode === "register" && !username.trim()) {
       return setError("Please enter a full name or username.");
     }
@@ -75,13 +83,23 @@ export const Auth = ({
       let publicKeyHex = "";
       let privateKeyHex = "";
 
+      /**
+       * Deterministic Key Derivation
+       * This is the core "Zero-Knowledge" part of my project.
+       * Instead of the server managing the keys, the browser derives them locally.
+       */
       if (mode === "login" || mode === "register") {
         await _sodium.ready;
         const sodium = _sodium;
 
+        //I use the user's email as salt to ensure their keys are unique even if two users have the same password.
         const saltStr = cleanEmail.padEnd(16, " ").slice(0, 16);
         const salt = sodium.from_string(saltStr);
 
+        /**
+         * I chose Argon2id (crypto password hash) becaus it is resistant to GPU cracking.
+         * This creates a master seed from the password.
+         */
         const seed = sodium.crypto_pwhash(
           sodium.crypto_sign_SEEDBYTES,
           password,
@@ -91,11 +109,17 @@ export const Auth = ({
           sodium.crypto_pwhash_ALG_ARGON2ID13,
         );
 
+        /**
+         * This seed generates an Ed25519 keypair.
+         * This is the "identity key" used to sign all the uploads.
+         * This proves the owner's identity.
+         */
         const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
         publicKeyHex = sodium.to_hex(identityKeypair.publicKey);
         privateKeyHex = sodium.to_hex(identityKeypair.privateKey);
       }
 
+      // I dynamically set the endpoint and payload based on the mode/state of the UI
       let endpoint = "";
       let bodyPayload: any = {};
 
@@ -108,7 +132,7 @@ export const Auth = ({
           username,
           email: cleanEmail,
           password,
-          publicKey: publicKeyHex,
+          publicKey: publicKeyHex, // Only this public key is sent to the server
         };
       } else if (mode === "otp") {
         endpoint = "/api/otp/verify-otp";
@@ -124,7 +148,11 @@ export const Auth = ({
         body: JSON.stringify(bodyPayload),
       });
 
-      // 2. CRASH PREVENTION: Check if the backend proxy returned HTML instead of JSON
+      /**
+       * Crash Prevention
+       * If the backend is off (if I accidentally forget to run the backend scripts), the proxy will return an HTML error page.
+       * This basically checks the content-type to preven the res.json from crashing.
+       */
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error(
@@ -134,8 +162,11 @@ export const Auth = ({
 
       const data = await res.json();
 
+      // Response Handling
       if (mode === "login") {
         if (data.userId) {
+          // Key security: I store the private key in session storage.
+          // It will stay in the memory for the session but is never saved to a local storage.
           sessionStorage.setItem("surewill_identity_key", privateKeyHex);
           setTempUserId(data.userId);
           setMode("otp");
@@ -165,7 +196,6 @@ export const Auth = ({
       }
     } catch (err: any) {
       console.error("Auth Error:", err);
-      // This will now print the EXACT error to your UI instead of a generic message
       setError(err.message || "An unexpected error occurred.");
     }
     setLoading(false);

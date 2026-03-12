@@ -14,7 +14,6 @@ const relationshipColors: Record<string, any> = {
   other: { bg: "#F5F5F5", text: "#707070", border: "#D0D0D0" },
 };
 
-// ADDED 'phone' to the empty state
 const EMPTY = {
   full_name: "",
   relationship: "child",
@@ -69,7 +68,6 @@ const BeneficiaryList: React.FC<{
       const res = await fetch("/api/beneficiaries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ADDED 'phone' to the backend payload
         body: JSON.stringify({
           userId,
           fullName: form.full_name,
@@ -397,7 +395,7 @@ const BeneficiaryList: React.FC<{
                 />
               </div>
               <div>
-                {/* ADDED: Mobile phone input field */}
+                {/*Mobile phone input field */}
                 <label
                   className="block text-xs font-medium mb-1.5"
                   style={{ color: "#4A453F" }}

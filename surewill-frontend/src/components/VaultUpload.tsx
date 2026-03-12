@@ -94,7 +94,7 @@ const VaultUpload: React.FC<{
       });
       if (res.ok) {
         setItems((prev) => prev.filter((i) => i._id !== itemId));
-        onAssetUploaded(); // This updates the dashboard progress bar!
+        onAssetUploaded(); // This updates the dashboard progress bar
       } else {
         alert("Failed to delete asset.");
       }
@@ -109,14 +109,26 @@ const VaultUpload: React.FC<{
 
   const handleSave = async () => {
     setStatusMsg("");
+
+    /**
+     * Enforces a strict File Required check.
+     * Ensures the encryption engine always has a valid buffer to process.
+     */
     if (!file) return setStatusMsg("Error: Please attach a file to encrypt.");
 
+    /**
+     * Shamir's Secret Logic Validation
+     * This checks the user doesn't try to generate more shards than they have heirs.
+     * One shard is always reserved for the system.
+     */
     const shardsForHeirs = nTotal - 1;
     if (shardsForHeirs > heirCount) {
       return setStatusMsg(
         `Error: Generating ${shardsForHeirs} shards, but you only have ${heirCount} heirs registered. Lower Total Shards (n).`,
       );
     }
+
+    // Math rule: You can't require more shards than you actually created.
     if (kThreshold > nTotal)
       return setStatusMsg(
         "Error: Required (k) cannot exceed Total Shards (n)!",
@@ -125,30 +137,57 @@ const VaultUpload: React.FC<{
     setUploading(true);
     setStatusMsg("Encrypting and Splitting shards...");
 
+    // The Cryptography
     try {
+      // I initialize Libsodium before using any random number generators.
       await _sodium.ready;
       const sodium = _sodium;
+
+      /**
+       * Converts the file into raw byte array,
+       * so the encryption math can process it directly
+       */
       const fileBuffer = await file.arrayBuffer();
       const fileData = new Uint8Array(fileBuffer);
+
+      /**
+       * Generating a cryptographic secure 32-byte Master Key.
+       * This master key never leaves the browser in its whole form.
+       */
       const masterKey = sodium.randombytes_buf(
         sodium.crypto_secretbox_KEYBYTES,
       );
 
-      // Shard Generation
+      /**
+       * Shamir's Secret Sharing
+       * This is where I split the master key into pieces
+       * It is converted to hex strings so they can be stored as text in the DB.
+       */
       const shards = await split(masterKey, nTotal, kThreshold);
       const hexShards = shards.map((s) => sodium.to_hex(s));
 
-      // Encryption
+      /**
+       * Data Encryption (using SecretBox)
+       * I use XSalsa20-Poly1305 (secretbox) for the encryption.
+       * The nonce is a number used once to ensure the same file
+       * encrypted twice has a different ciphertext.
+       */
       const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
       const ciphertext = sodium.crypto_secretbox_easy(
         fileData,
         nonce,
         masterKey,
       );
+
+      // Everything is encoded to Base64 to make it safe for JSON transport.
       const encryptedBase64 = sodium.to_base64(ciphertext);
       const nonceBase64 = sodium.to_base64(nonce);
 
-      // Digital Signature
+      /**
+       * The Digital Signature and Integrity
+       * I create a SHA-256 hash of the original file.
+       * This acts as the unique fingerprint to detect tampering later.
+       */
       setStatusMsg("Generating Anti-Forgery Fingerprint..");
       const hashBuffer = await crypto.subtle.digest("SHA-256", fileData);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -156,7 +195,7 @@ const VaultUpload: React.FC<{
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
-      // --- NEW IDENTITY BINDING LOGIC ---
+      // I get the user's private identity key from session memory.
       const privateKeyHex = sessionStorage.getItem("surewill_identity_key");
 
       if (!privateKeyHex) {
@@ -167,18 +206,23 @@ const VaultUpload: React.FC<{
 
       const privateKey = sodium.from_hex(privateKeyHex);
 
-      // In Libsodium, the 64-byte private key contains the 32-byte seed in the first half.
-      // I'm extracting the seed here to reconstruct that keypair
+      /**
+       * Extracting the seed to reconstruct the Ed25519 signing keypair.
+       * This is part of the Zero-Knowledge Identity Binding Logic.
+       */
       const seed = privateKey.slice(0, 32);
       const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
 
-      // This will sign the asset to the user's true identity
+      /**
+       * Finally, I sign the file hash.
+       * This proves that ONLY this user could have uploaded this specific file.
+       */
       const signature = sodium.crypto_sign_detached(
         fileHash,
         identityKeypair.privateKey,
       );
 
-      // sending it to the backend
+      // The secure upload
       setStatusMsg("Uploading to Secure Vault...");
       const res = await fetch("/api/vault/upload", {
         method: "POST",
@@ -187,7 +231,7 @@ const VaultUpload: React.FC<{
           userId,
           encryptedData: encryptedBase64,
           nonce: nonceBase64,
-          shards: hexShards,
+          shards: hexShards, // These shards are sent to be further encrypted by the server, showcasing Defense in Depth.
           threshold: kThreshold,
           totalShards: nTotal,
           fileHash: fileHash,
@@ -208,7 +252,7 @@ const VaultUpload: React.FC<{
         setFile(null);
         setStatusMsg("");
         fetchItems();
-        onAssetUploaded();
+        onAssetUploaded(); // Updates the dashboard UI
       } else {
         const data = await res.json();
         setStatusMsg(data.error || "Upload failed.");
