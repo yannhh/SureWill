@@ -346,9 +346,15 @@ app.post("/api/beneficiary/claims", async (req, res) => {
     beneficiary.otp_code = undefined;
     await beneficiary.save();
 
+    // FIXED: Decrypt shards from AES-256 storage before sending to heir
+    const decryptedClaims = beneficiary.assigned_assets.map((claim: any) => ({
+      assetId: claim.assetId,
+      shard: decryptionAtRest(claim.shard),
+    }));
+
     res.json({
       fullName: beneficiary.full_name,
-      claims: beneficiary.assigned_assets,
+      claims: decryptedClaims, // Send the decrypted claims
     });
   } catch (err) {
     res.status(500).json({ error: "Server error getting claims." });
@@ -545,7 +551,7 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
 
     // Find the beneficiary record that has the specific asset id bound to them
     const beneficiary = await Beneficiary.findOne({
-      "assigned_assets.assetId": asset._id,
+      "assigned_assets.assetId": assetId,
     });
 
     let systemShard = null;
@@ -578,6 +584,7 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
       signature: asset.signature,
       public_key: asset.public_key,
       ownerPublicKey: owner?.public_key,
+      unlockCondition: asset.unlock_condition,
     });
   } catch (err) {
     console.error("Download  Error", err);
@@ -683,30 +690,26 @@ app.get("/api/beneficiary/claims/:email", async (req, res) => {
       return res.status(404).json({ error: "No beneficiary found." });
     }
 
+    // Only return the shards if the Dead Man's Switch has been triggered
     if (!beneficiary.access_granted) {
       return res.status(403).json({
         error: "Access Denied. The vault is still locked by the owner.",
       });
     }
 
+    // Now it is safe to decrypt and return the shards
     const decryptedClaims = beneficiary.assigned_assets.map((claim: any) => ({
       assetId: claim.assetId,
-      shard: decryptionAtRest(claim.shard),
+      shard: decryptionAtRest(claim.shard), // Decrypting from AES-256 storage
     }));
 
     res.json({
       fullName: beneficiary.full_name,
       claims: decryptedClaims,
     });
-
-    // Return the list of assets and the specific shards the heir has
-    res.json({
-      fullName: beneficiary.full_name,
-      claims: beneficiary.assigned_assets, // This one returns the db array of assetId and the shar
-    });
   } catch (err) {
     console.error("Claims Error:", err);
-    res.status(500).json({ error: "Server error getting the claims of user." });
+    res.status(500).json({ error: "Server error getting the claims." });
   }
 });
 

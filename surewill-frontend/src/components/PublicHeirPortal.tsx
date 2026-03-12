@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { combine } from "shamir-secret-sharing";
 import _sodium from "libsodium-wrappers-sumo";
+import { assert } from "node:console";
 
 const MotionDiv = motion.div;
 
@@ -27,6 +28,8 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
     id: string;
     shard: string;
   } | null>(null);
+
+  const [showCondition, setShowCondition] = useState(""); // This is for showing the unlock condition to the heir
 
   const [shardsInput, setShardsInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -97,108 +100,134 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
   };
 
   const handleUnlock = async () => {
-    if (!shardsInput)
+    // 1. Safeguard the ID (Catches the assetId/id naming mismatch)
+    const targetId = activeClaim?.id || (activeClaim as any)?.assetId;
+    if (!targetId || targetId === "undefined") {
       return setStatus({
         type: "error",
-        msg: "Please enter your assigned Shards.",
+        msg: "Error: Asset ID not found. Please go back and re-select the claim.",
       });
+    }
+
     setLoading(true);
     setStatus({
       type: "info",
-      msg: "Fetching vault data and authorizing release...",
+      msg: "Authorizing release and retrieving cryptographic metadata...",
     });
 
     try {
-      const res = await fetch(`/api/vault/download/${activeClaim!.id}`);
+      // 2. Fetch from the secure backend
+      const res = await fetch(`/api/vault/download/${targetId}`);
       const asset = await res.json();
 
       if (!asset || asset.error)
         throw new Error(asset.error || "Failed to fetch asset.");
-      if (!asset.systemShard)
+      if (asset.unlockCondition) setShowCondition(asset.unlockCondition);
+
+      if (!asset.systemShard) {
         throw new Error(
           "Access Denied: The system shard is still locked. The owner is currently active.",
         );
+      }
 
+      // 3. Smart Cryptographic Reconstruction
       await _sodium.ready;
       const sodium = _sodium;
-      setStatus({
-        type: "info",
-        msg: "Reconstructing Master Key via Hybrid Consensus...",
-      });
 
-      const userShards = shardsInput
+      // Parse any extra shards the user pasted in the box (if any)
+      const extraShards = shardsInput
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s !== "");
-      const totalCollected = userShards.length + 1;
+
+      // Calculate total: User's Primary Shard (1) + System Shard (1) + Any extra pasted shards
+      const totalCollected = 2 + extraShards.length;
 
       if (totalCollected < asset.threshold) {
         throw new Error(
-          `Threshold not met. Requires ${asset.threshold} shards. You provided ${userShards.length}, System provides 1.`,
+          `Threshold not met. This vault requires ${asset.threshold} total shards.`,
         );
       }
 
-      const userShardsBuffers = userShards.map((hex) => sodium.from_hex(hex));
-      const systemShardBuffer = sodium.from_hex(asset.systemShard);
+      // 4. Combine Shards (AUTOMATICALLY includes their primary shard from React State!)
       const masterKey = await combine([
-        ...userShardsBuffers,
-        systemShardBuffer,
+        sodium.from_hex(activeClaim!.shard), // Auto-inject the Heir's primary shard
+        sodium.from_hex(asset.systemShard), // Auto-inject the System shard
+        ...extraShards.map((hex) => sodium.from_hex(hex)), // Add any additional shards they pasted
       ]);
 
-      const ciphertext = sodium.from_base64(asset.encrypted_data);
-      const nonce = sodium.from_base64(asset.nonce);
+      // 5. Decryption
       const decryptedBytes = sodium.crypto_secretbox_open_easy(
-        ciphertext,
-        nonce,
+        sodium.from_base64(asset.encrypted_data),
+        sodium.from_base64(asset.nonce),
         masterKey,
       );
 
-      if (!decryptedBytes) throw new Error("Decryption failed. Invalid shard.");
+      if (!decryptedBytes)
+        throw new Error("Decryption failed. Invalid or tampered shard.");
 
-      setStatus({ type: "info", msg: "Verifying File Integrity..." });
-      const currentHashBuffer = await crypto.subtle.digest(
+      // 6. Security Fix: Integrity & Identity Verification
+      setStatus({
+        type: "info",
+        msg: "Verifying File Integrity & Identity Binding...",
+      });
+
+      const safeBuffer =
+        decryptedBytes instanceof Uint8Array
+          ? decryptedBytes
+          : new Uint8Array(decryptedBytes as any);
+
+      const currentHashBuffer = await window.crypto.subtle.digest(
         "SHA-256",
-        decryptedBytes.buffer as ArrayBuffer,
+        safeBuffer,
       );
       const currentHashArray = Array.from(new Uint8Array(currentHashBuffer));
       const currentHash = currentHashArray
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
-      if (currentHash !== asset.fileHash)
-        throw new Error("Integrity Check failed. Contents altered.");
+      if (currentHash !== asset.fileHash) {
+        throw new Error(
+          "Integrity Check failed. The database payload was altered!",
+        );
+      }
 
-      setStatus({ type: "info", msg: "Verifying Identity Binding..." });
+      // 7. Identity Fallback (Ensures we never get "incomplete input" on missing old keys)
+      const publicKeyToVerify = asset.public_key || asset.ownerPublicKey;
+      if (!publicKeyToVerify)
+        throw new Error("Missing public key to verify signature.");
 
       const isAuthentic = sodium.crypto_sign_verify_detached(
         sodium.from_hex(asset.signature),
         currentHash,
-        sodium.from_hex(asset.ownerPublicKey),
+        sodium.from_hex(publicKeyToVerify),
       );
 
-      if (!isAuthentic)
-        throw new Error(
-          "Forgery Detected! Signature mismatch against Owner Identity.",
-        );
+      if (!isAuthentic) {
+        throw new Error("Forgery Detected! Signature mismatch.");
+      }
 
-      const blob = new Blob([new Uint8Array(decryptedBytes)], {
+      // 8. Bulletproof Blob Construction
+      const blob = new Blob([safeBuffer], {
         type: asset.file_type || "application/octet-stream",
       });
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = asset.file_name || "SureWill_Unlocked.bin";
       a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       setStatus({
         type: "success",
         msg: "Success! Vault Unlocked and file downloaded.",
       });
     } catch (err: any) {
+      console.error("Decryption Error:", err);
       setStatus({
         type: "error",
-        msg:
-          err.message || "Decryption Failed: Invalid shard or tampered asset!",
+        msg: err.message || "An unexpected error occurred.",
       });
     }
     setLoading(false);
@@ -415,6 +444,17 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
                       Decrypt Asset
                     </h3>
                   </div>
+
+                  {showCondition && (
+                    <div className="mb-4 p-4 rounded-xl border border-[#C9A96E]/30 bg-[#FDF6ED]">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-[#A07030] mb-1">
+                        Owner's Reveal Condition:
+                      </p>
+                      <p className="text-sm italic text-[#2D2926]">
+                        "{showCondition}"
+                      </p>
+                    </div>
+                  )}
 
                   <div className="mb-4 p-4 rounded-xl bg-[#F0F5F2] border border-[#B8D4BF]">
                     <p className="text-xs text-[#2D2926] mb-1">

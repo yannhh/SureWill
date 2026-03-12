@@ -544,6 +544,9 @@
   .border-\[\#B8D4BF\] {
     border-color: #B8D4BF;
   }
+  .border-\[\#C9A96E\]\/30 {
+    border-color: color-mix(in oklab, #C9A96E 30%, transparent);
+  }
   .border-\[\#E8E3DC\] {
     border-color: #E8E3DC;
   }
@@ -579,6 +582,9 @@
   }
   .bg-\[\#FAF7F2\] {
     background-color: #FAF7F2;
+  }
+  .bg-\[\#FDF6ED\] {
+    background-color: #FDF6ED;
   }
   .bg-blue-50 {
     background-color: var(--color-blue-50);
@@ -796,6 +802,9 @@
   }
   .text-\[\#8C8579\] {
     color: #8C8579;
+  }
+  .text-\[\#A07030\] {
+    color: #A07030;
   }
   .text-\[\#C4BEB6\] {
     color: #C4BEB6;
