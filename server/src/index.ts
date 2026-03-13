@@ -228,6 +228,30 @@ app.post("/api/register", async (req, res) => {
   // I'm getting the user's details from the body of the POST request.
   const { username, email, password, publicKey, estatePreference } = req.body;
 
+  if (typeof password !== "string") {
+    return res.status(400).json({
+      error: "Invalid password format, Please don't use numbers only",
+    });
+  }
+
+  if (password.length < 6) {
+    return res
+      .status(400)
+      .json({ error: "Password must have at least 6 characters." });
+  }
+
+  if (!/\d/.test(password)) {
+    return res
+      .status(400)
+      .json({ error: "Password must contain at least one number." });
+  }
+
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return res
+      .status(400)
+      .json({ error: "Password must contain at least one special character." });
+  }
+
   try {
     // I have to make sure the crypto library is loaded and ready before I use it.
     await sodium.ready;
@@ -442,13 +466,13 @@ app.post("/api/forgot-password", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: "User was not found." });
 
-    // I'm generating a secure, random token that will be part of the reset link.
+    // Generating a secure, random token that will be part of the reset link.
     const token = crypto.randomBytes(16).toString("hex");
     user.reset_token = token;
-    user.reset_expires = new Date(Date.now() + 3600000); // The token will expire in 1 hour.
+    user.reset_expires = new Date(Date.now() + 3600000); // token will expire in 1 hour.
     await user.save();
 
-    // I'll create the full reset URL and send it to the user's email.
+    // hardcoded the full reset URL and send it to the user's email because I'm getting API
     const resetURL = `http://127.0.0.1:5500/reset-password.html?token=${token}`;
     await sendResetEmail(user.email as string, resetURL);
 
@@ -461,6 +485,30 @@ app.post("/api/forgot-password", async (req, res) => {
 // This is the second step. The user has clicked the link in their email and is now submitting a new password.
 app.post("/api/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
+
+  if (typeof newPassword !== "string") {
+    return res.status(400).json({
+      error: "Invalid password format, Please don't use numbers only",
+    });
+  }
+
+  if (newPassword.length < 6) {
+    return res
+      .status(400)
+      .json({ error: "Password must have at least 6 characters." });
+  }
+
+  if (!/\d/.test(newPassword)) {
+    return res
+      .status(400)
+      .json({ error: "Password must contain at least one number." });
+  }
+
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+    return res
+      .status(400)
+      .json({ error: "Password must contain at least one special character." });
+  }
 
   try {
     // This is a critical security check. I'm finding a user who has the matching token AND whose token has not expired.

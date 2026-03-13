@@ -1,65 +1,91 @@
 // test-validation.js
-const API_URL = "http://localhost:5050/api";
+
+// 1. Tell Node.js it is okay to test against our local self-signed HTTPS certificate
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+const API_URL = "https://localhost:5050/api";
 
 async function runTests() {
-  console.log("🛡️ Starting Input Validation Pentest...\n");
+  console.log("🛡️ Starting Deep Input Validation & Security Pentest...\n");
 
-  // TEST 1: The "Missing Array" Crash Test
-  // We send a vault upload without the 'shards' array. If the server doesn't validate this,
-  // shards.map() will cause a fatal 500 server crash.
+  // TEST 1: Missing Shards Array (Denial of Service attempt)
+  console.log("▶ TEST 1: Uploading asset with missing 'shards' array...");
   try {
-    console.log("Test 1: Uploading asset with missing 'shards' array...");
-    const res = await fetch(`${API_URL}/vault/upload`, {
+    const res1 = await fetch(`${API_URL}/vault/upload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userId: "60d5ecb8b392d70015332211",
         encryptedData: "bad-data",
-        // Notice: 'shards' is intentionally missing
+        // 'shards' array is missing
       }),
     });
-    console.log(`Result: HTTP ${res.status} (If 500, your server crashed!)\n`);
-  } catch (err) {
-    console.log("Result: Request failed entirely.\n");
-  }
 
-  // TEST 2: The "Wrong Data Type" Test
-  // Passing a number into a field that expects a string (like password).
+    // Read the exact response from your server
+    const data1 = await res1.json();
+    console.log(`  ↳ Status: HTTP ${res1.status}`);
+    console.log(`  ↳ Server Reply:`, data1);
+  } catch (err) {
+    console.log(`  ↳ Network Error:`, err.message);
+  }
+  console.log("--------------------------------------------------\n");
+
+  // TEST 2: Wrong Data Type (Crashing the Crypto Engine)
+  console.log(
+    "▶ TEST 2: Registering with an integer instead of a password string...",
+  );
   try {
-    console.log("Test 2: Registering user with an integer as a password...");
-    const res = await fetch(`${API_URL}/register`, {
+    const res2 = await fetch(`${API_URL}/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "hacker123",
         email: "hacker@test.com",
-        password: 123456789, // Libsodium expects a string, this might crash it!
+        password: 123456789, // Libsodium expects a string!
       }),
     });
-    console.log(`Result: HTTP ${res.status} (If 500, Libsodium crashed!)\n`);
-  } catch (err) {}
+    const data2 = await res2.json();
+    console.log(`  ↳ Status: HTTP ${res2.status}`);
+    console.log(`  ↳ Server Reply:`, data2);
+  } catch (err) {
+    console.log(`  ↳ Network Error:`, err.message);
+  }
+  console.log("--------------------------------------------------\n");
 
-  // TEST 3: The "Empty String" Bypass
-  // Trying to register a user with completely empty strings.
-  try {
-    console.log("Test 3: Registering with empty strings...");
-    const res = await fetch(`${API_URL}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: "",
-        email: "",
-        password: "",
-      }),
-    });
-    console.log(
-      `Result: HTTP ${res.status} (If 201, your DB accepted empty data!)\n`,
-    );
-  } catch (err) {}
-
+  // TEST 3: Rate Limiting / Brute Force Attack
   console.log(
-    "🏁 Tests complete. Check your backend terminal to see if it crashed!",
+    "▶ TEST 3: Brute Force Attack on /login (Testing Rate Limiter)...",
   );
+  console.log("  ↳ Firing 12 rapid login requests to overwhelm the server...");
+
+  for (let i = 1; i <= 12; i++) {
+    try {
+      const res3 = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "test@test.com",
+          password: "wrongpassword",
+        }),
+      });
+
+      // 429 is the universal HTTP code for "Too Many Requests"
+      if (res3.status === 429) {
+        const data3 = await res3.json();
+        console.log(`  ↳ Request ${i}: BLOCKED! Status: HTTP 429`);
+        console.log(`  ↳ Server Reply:`, data3);
+        break; // We proved the shield works, no need to keep looping
+      } else {
+        console.log(`  ↳ Request ${i}: Status: HTTP ${res3.status} (Allowed)`);
+      }
+    } catch (err) {
+      console.log(`  ↳ Network Error:`, err.message);
+      break;
+    }
+  }
+
+  console.log("--------------------------------------------------\n");
+  console.log("🏁 Pentest Complete. Review the server replies above!");
 }
 
 runTests();
