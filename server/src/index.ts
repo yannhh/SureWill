@@ -737,13 +737,31 @@ app.delete("/api/beneficiaries/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deletedBeneficiary = await Beneficiary.findByIdAndDelete(id);
+    const beneficiary = await Beneficiary.findById(id);
 
-    if (!deletedBeneficiary) {
+    if (!beneficiary) {
       return res.status(404).json({ error: "Beneficiary not found." });
     }
 
-    res.status(200).json({ message: "Beneficiary has been removed." });
+    // When removing a beneficiary, this ensures that the shard returns to the vault and doesn't just pop and disappear.
+    // The shard will go back to the vault and can be assigned to someone else, instead of just disappearing with the delete heir.
+    if (
+      beneficiary?.assigned_assets &&
+      beneficiary?.assigned_assets.length > 0
+    ) {
+      for (const claim of beneficiary.assigned_assets) {
+        await Asset.findByIdAndDelete(claim.assetId, {
+          $push: { shards: claim.shard },
+        });
+      }
+    }
+
+    await Beneficiary.findByIdAndDelete(id);
+
+    res.status(200).json({
+      message:
+        "Beneficiary has been removed and shard has been put back to the vault.",
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error deleting the beneficiary" });
