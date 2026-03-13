@@ -15,6 +15,12 @@ const userSchema = new Schema({
   reset_token: { type: String },
   reset_expires: { type: Date },
   public_key: { type: String }, //Storing the user's digital signature key (Ed25519)
+  // For Muslim users and Sharia Inheritance
+  estate_preference: {
+    type: String,
+    enum: ["standard", "sharia"],
+    default: "standard",
+  },
 });
 
 /**
@@ -49,7 +55,7 @@ const benefeciarySchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   full_name: String,
   email: String,
-  relationship: String,
+  relationship: { type: String, required: "true" },
   phone_number: String,
   otp_code: { type: String },
   otp_expires: { type: Date },

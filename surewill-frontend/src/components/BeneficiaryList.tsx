@@ -1,26 +1,58 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, Users, Check, X, Shield, Key } from "lucide-react";
+import { ShariaWillGenerator } from "./ShariaWillGenerator";
 
 const MotionDiv = motion.div;
 
 const relationshipColors: Record<string, any> = {
+  // The standard relationships
   spouse: { bg: "#FDF3F3", text: "#C07070", border: "#F5C6C6" },
   child: { bg: "#F0F5F2", text: "#4A7A5A", border: "#B8D4BF" },
   parent: { bg: "#FDF6ED", text: "#A07030", border: "#E8D5B0" },
   sibling: { bg: "#F0F0F8", text: "#5050A0", border: "#C0C0E0" },
   friend: { bg: "#F5F0F8", text: "#805090", border: "#D0B0E0" },
   charity: { bg: "#F5F5F0", text: "#707060", border: "#D0D0B0" },
-  other: { bg: "#F5F5F5", text: "#707070", border: "#D0D0D0" },
+  // The sharia relationships
+  husband: { bg: "#FDF3F3", text: "#C07070", border: "#F5C6C6" },
+  wife: { bg: "#FDF3F3", text: "#C07070", border: "#F5C6C6" },
+  son: { bg: "#F0F5F2", text: "#4A7A5A", border: "#B8D4BF" },
+  daughter: { bg: "#F0F5F2", text: "#4A7A5A", border: "#B8D4BF" },
+  father: { bg: "#FDF6ED", text: "#A07030", border: "#E8D5B0" },
+  mother: { bg: "#FDF6ED", text: "#A07030", border: "#E8D5B0" },
+  brother: { bg: "#F0F0F8", text: "#5050A0", border: "#C0C0E0" },
+  sister: { bg: "#F0F0F8", text: "#5050A0", border: "#C0C0E0" },
+  cousin: { bg: "#F5F5F5", text: "#707070", border: "#D0D0D0" },
 };
 
-const EMPTY = {
+const STANDARD_RELATIONSHIPS = [
+  "spouse",
+  "child",
+  "parent",
+  "sibling",
+  "friend",
+  "charity",
+];
+
+const SHARIA_RELATIONSHIPS = [
+  "husband",
+  "wife",
+  "son",
+  "daughter",
+  "father",
+  "mother",
+  "brother",
+  "sister",
+  "cousin",
+];
+
+const EMPTY = (pref: string) => ({
   full_name: "",
-  relationship: "child",
+  relationship: pref === "sharia" ? "son" : "child",
   email: "",
   phone: "",
   notes: "",
-};
+});
 
 const BeneficiaryList: React.FC<{
   userId: string;
@@ -30,9 +62,10 @@ const BeneficiaryList: React.FC<{
   const [assets, setAssets] = useState<any[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [estatePreferences, setEstatePreferences] = useState("standard");
 
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(EMPTY("standard"));
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -47,12 +80,25 @@ const BeneficiaryList: React.FC<{
 
   const fetchData = async () => {
     try {
-      const [assetRes, benRes] = await Promise.all([
+      const [assetRes, benRes, userRes] = await Promise.all([
         fetch(`/api/vault/list/${userId}`),
         fetch(`/api/beneficiaries/${userId}`),
+        fetch(`/api/user/${userId}`),
       ]);
+
       setAssets(await assetRes.json());
       setBeneficiaries(await benRes.json());
+
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        console.log("User Data:", userData); // Having trouble with the sharia setting the form ui changes
+        const pref = userData.estatePreference || "standard";
+        setEstatePreferences(pref);
+        setForm(EMPTY(pref));
+      } else {
+        console.error("Backend fetch failed.", userRes.status);
+      }
+
       setLoading(false);
     } catch (err) {
       console.error("Failed to load data for dropdowns");
@@ -83,7 +129,7 @@ const BeneficiaryList: React.FC<{
         fetchData();
         onBeneficiaryAdded();
         setShowForm(false);
-        setForm(EMPTY);
+        setForm(EMPTY(estatePreferences));
         setTimeout(() => setStatus(""), 3000);
       } else {
         setStatus(data.error || "Failed to register beneficiary.");
@@ -356,16 +402,13 @@ const BeneficiaryList: React.FC<{
                     setForm({ ...form, relationship: e.target.value })
                   }
                 >
-                  {[
-                    "spouse",
-                    "child",
-                    "parent",
-                    "sibling",
-                    "friend",
-                    "charity",
-                    "other",
-                  ].map((r) => (
+                  {/* Dynamic Rendering Based on Legal Preference */}
+                  {(estatePreferences === "sharia"
+                    ? SHARIA_RELATIONSHIPS
+                    : STANDARD_RELATIONSHIPS
+                  ).map((r) => (
                     <option key={r} value={r}>
+                      {/* Capitalizes the first letter so 'son' becomes 'Son' */}
                       {r.charAt(0).toUpperCase() + r.slice(1)}
                     </option>
                   ))}
@@ -437,7 +480,7 @@ const BeneficiaryList: React.FC<{
               <button
                 onClick={() => {
                   setShowForm(false);
-                  setForm(EMPTY);
+                  setForm(EMPTY(estatePreferences));
                 }}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm transition-colors hover:bg-gray-100"
                 style={{ backgroundColor: "#F5F1EC", color: "#8C8579" }}
@@ -453,7 +496,7 @@ const BeneficiaryList: React.FC<{
         <button
           onClick={() => {
             setShowForm(true);
-            setForm(EMPTY);
+            setForm(EMPTY(estatePreferences));
           }}
           className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-white text-sm font-medium transition-all hover:-translate-y-0.5"
           style={{
@@ -576,6 +619,9 @@ const BeneficiaryList: React.FC<{
             </button>
           </div>
         </MotionDiv>
+      )}
+      {estatePreferences === "sharia" && beneficiaries.length > 0 && (
+        <ShariaWillGenerator beneficiaries={beneficiaries} />
       )}
     </div>
   );

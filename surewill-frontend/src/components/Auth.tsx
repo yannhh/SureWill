@@ -32,6 +32,7 @@ export const Auth = ({
   const [username, setUsername] = useState("");
   const [otp, setOtp] = useState("");
   const [tempUserId, setTempUserId] = useState("");
+  const [estatePreference, setEstatePreference] = useState("standard");
 
   // UI States
   const [loading, setLoading] = useState(false);
@@ -133,6 +134,7 @@ export const Auth = ({
           email: cleanEmail,
           password,
           publicKey: publicKeyHex, // Only this public key is sent to the server
+          estatePreference: estatePreference,
         };
       } else if (mode === "otp") {
         endpoint = "/api/otp/verify-otp";
@@ -319,20 +321,57 @@ export const Auth = ({
 
                 <div className="space-y-4">
                   {mode === "register" && (
-                    <div className="relative">
-                      <User
-                        className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2"
-                        style={{ color: "#A8A09A" }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Full Name or Username"
-                        className={inputClass}
-                        style={inputStyle}
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                      />
-                    </div>
+                    <>
+                      {/*Sharia Toggle*/}
+                      <div className="p-4 rounded-xl border border-[#E8E3DC] bg-white">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <div className="relative flex items-center mt-1">
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={estatePreference === "sharia"}
+                              onChange={(e) =>
+                                setEstatePreference(
+                                  e.target.checked ? "sharia" : "standard",
+                                )
+                              }
+                            />
+                            <div
+                              className={`block w-10 h-6 rounded-full transition-colors ${estatePreference === "sharia" ? "bg-[#C9A96E]" : "bg-gray-200"}`}
+                            ></div>
+                            <div
+                              className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${estatePreference === "sharia" ? "transform translate-x-4" : ""}`}
+                            ></div>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-[#2D2926]">
+                              Enable Islamic Inheritance (Faraid)
+                            </p>
+                            <p className="text-xs text-[#8C8579] mt-1 leading-relaxed">
+                              Activating this will tailor your vault to help you
+                              allocate financial assets according to Sharia
+                              proportions based on your registered family
+                              members.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+
+                      <div className="relative">
+                        <User
+                          className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2"
+                          style={{ color: "#A8A09A" }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Full Name or Username"
+                          className={inputClass}
+                          style={inputStyle}
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                        />
+                      </div>
+                    </>
                   )}
 
                   {(mode === "login" ||
@@ -394,7 +433,7 @@ export const Auth = ({
                   )}
                 </div>
 
-                {/* Action Button */}
+                {/*Action Button*/}
                 <button
                   onClick={handleAction}
                   disabled={loading}
@@ -417,7 +456,7 @@ export const Auth = ({
                   )}
                 </button>
 
-                {/* Navigation Links */}
+                {/*Nav Links*/}
                 <div
                   className="mt-6 text-center text-xs"
                   style={{ color: "#8C8579" }}

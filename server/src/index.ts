@@ -214,7 +214,7 @@ async function sendResetEmail(email: string, resetURL: string) {
 // This is my endpoint for when a new user signs up.
 app.post("/api/register", async (req, res) => {
   // I'm getting the user's details from the body of the POST request.
-  const { username, email, password, publicKey } = req.body;
+  const { username, email, password, publicKey, estatePreference } = req.body;
 
   try {
     // I have to make sure the crypto library is loaded and ready before I use it.
@@ -233,6 +233,7 @@ app.post("/api/register", async (req, res) => {
       email,
       password_hash: hashedPassword,
       public_key: publicKey,
+      estate_preference: estatePreference || "standard",
     });
     await newUser.save();
 
@@ -247,6 +248,25 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json({
       error: "Registration Failed. User login credentials may already exist.",
     });
+  }
+});
+
+// Fetch User Profile
+// The frontend needs this so it can show the Sharia Will Generator (if the user is Muslim).
+app.get("/api/user/:id", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    res.json({
+      username: user.username,
+      email: user.email,
+      estatePreference: user.estate_preference,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server Error!" });
   }
 });
 
