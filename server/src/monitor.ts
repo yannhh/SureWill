@@ -6,24 +6,34 @@ import nodemailer from "nodemailer";
 dotenv.config();
 dbConnection();
 
+let transporter: nodemailer.Transporter;
+
+async function mailerSetup() {
+  if (!transporter) {
+    console.log("Initializing Ethereal Test Account..");
+    const testAccount = await nodemailer.createTestAccount();
+
+    transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    console.log("Transporter ready.");
+  }
+}
+
+mailerSetup().catch(console.error);
+
 /**
  * Im using Ethereal Mail to simulate the real-world notification. (Production SMTP has payments).
- * SMTP email to tell the beneficiary that the user's assets have been released.
+ * Mock SMTP email to tell the beneficiary that the user's assets have been released.
  */
 async function sendNotification(beneficiaryEmail: string, userName: string) {
-  // Creating a test account
-  let testAccount = await nodemailer.createTestAccount();
-
-  // Configuring the SMTP transporter
-  let transporter = nodemailer.createTransport({
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
+  if (!transporter) await mailerSetup(); //This ensures the transporter is ready before sending
 
   // Defining the email content and then sending it
   let info = await transporter.sendMail({
@@ -47,16 +57,7 @@ async function sendAckEmail(
   userName: string,
   userId: string,
 ) {
-  let testAccount = await nodemailer.createTestAccount();
-  let transporter = nodemailer.createTransport({
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
+  if (!transporter) await mailerSetup();
 
   const ackURL = `https://localhost:5050/api/acknowledge/${userId}`;
 
