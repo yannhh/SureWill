@@ -55,7 +55,7 @@ const beneficiarySchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   full_name: String,
   email: String,
-  relationship: { type: String, required: "true" },
+  relationship: { type: String, required: true },
   phone_number: String,
   otp_code: { type: String },
   otp_expires: { type: Date },

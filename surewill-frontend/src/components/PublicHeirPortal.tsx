@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { combine } from "shamir-secret-sharing";
 import _sodium from "libsodium-wrappers-sumo";
-import { assert } from "node:console";
 
 const MotionDiv = motion.div;
 
