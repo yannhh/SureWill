@@ -393,7 +393,7 @@ app.post("/api/beneficiary/request-otp", async (req, res) => {
     console.log(`\nTwilio SMS: Sent to ${beneficiary.phone_number}:`);
     console.log(`"Your Heir Portal security code is: ${otp}"\n`);
 
-    res.json({ message: "OTP has been sent to your phne." });
+    res.json({ message: "OTP has been sent to your phone." });
   } catch (err) {
     res.status(500).json({ error: "Error sending SMS." });
   }
@@ -494,7 +494,7 @@ app.post("/api/forgot-password", async (req, res) => {
     const resetURL = `http://127.0.0.1:5500/reset-password.html?token=${token}`;
     await sendResetEmail(user.email as string, resetURL);
 
-    res.json({ messsage: "Password reset link has been sent to your email." });
+    res.json({ message: "Password reset link has been sent to your email." });
   } catch (err) {
     res.status(500).json({ error: "Error resetting the password." });
   }
