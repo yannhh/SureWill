@@ -321,38 +321,37 @@ app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
 
   if (typeof email !== "string" || typeof password !== "string") {
-    return res
-      .status(400)
-      .json({
-        error:
-          "Invalid credentials entered! Please use your email and password only.",
-      });
+    return res.status(400).json({
+      error:
+        "Invalid credentials entered! Please use your email and password only.",
+    });
   }
 
   try {
     await sodium.ready;
-    // First, I'll find the user in my database by their email.
+    // Find the user in my database by their email.
     const user = await User.findOne({ email });
 
-    // I'll check if a user was found AND if the password they provided matches the hash I have stored.
+    // Check if a user was found and if the password they provided matches the hash in my db.
     if (
       !user ||
       !sodium.crypto_pwhash_str_verify(user.password_hash, password)
     ) {
-      // If not, I'll send a generic error message for security.
+      // If not, it'll send a generic error message for security.
       return res.status(401).json({ error: "Invalid Email or Password." });
     }
 
-    // If the password is correct, I'll generate a random 6-digit OTP for the second factor of authentication.
+    // If the password is correct, This generates a random otp using Libsodium.
+    // It doesn't use math.random for safety
     const otp = crypto.randomInt(100000, 999999).toString();
     user.otp_code = otp;
     user.otp_expires = new Date(Date.now() + 10 * 60000); // The OTP will expire in 10 minutes.
 
-    await user.save(); // I'm saving the OTP and its expiration time to the user's document.
-    // Now I'll use my helper function to email the OTP to the user.
+    await user.save(); // Saves the OTP and its expiration time to the user's document.
+    // Now it'll send the otp as an email to the user
     await sendOTPToEmail(user.email, otp);
 
-    // I'll let the frontend know that the OTP was sent.
+    // Sending it the frontend to let the user know.
     res.json({ message: "OTP has been sent to your email.", userId: user._id });
   } catch (err) {
     console.error("[LOGIN ERROR] An error occurred during login:", err);
