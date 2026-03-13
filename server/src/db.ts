@@ -6,7 +6,7 @@ dotenv.config();
 /**
  * Built this connection script for 2 separate scenarios
  * It tries to connect to my MongoDB Atlas cloud database first.
- * If that doesn't work then, theres a failsafe, that it will connect to the local db that I have.
+ * If that doesn't work then, theres a failsafe, that it will connect to the local db in my laptop.
  * This was created because the university wifi often whitelists my IP so atlas doesn't work.
  */
 const dbConnection = async () => {

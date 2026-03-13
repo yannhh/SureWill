@@ -1,12 +1,12 @@
 @import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap");
 
-/* This line forces Tailwind v4 to scan every file in your src folder */
+/* Tailwind directory helper because I'm having problems with tailwind not recognizing my directory */
 @source "./";
 
 @layer base {
   :root {
-    /* SureWill Premium Brand Colors */
+    /* SureWill neutral colors for nice usability and feel */
     --sage: #7b9e87;
     --sage-light: #a8c4ae;
     --sage-dark: #4a7a5a;
@@ -19,7 +19,7 @@
     --gold: #c9a96e;
     --gold-light: #e8d5b0;
 
-    /* Standard UI Variables */
+    /*UI variables*/
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -53,7 +53,7 @@
   }
 }
 
-/* Custom Typography & Utility Classes */
+/*Custom typefaces and utility*/
 .font-serif {
   font-family: "Cormorant Garamond", serif;
 }
@@ -91,7 +91,7 @@
   border-color: var(--stone-light);
 }
 
-/* SureWill Transitional Component Styles for Older Pages */
+/*Vault styling*/
 .vault-container {
   background-color: white;
   border: 1px solid var(--border, #e8e3dc);
