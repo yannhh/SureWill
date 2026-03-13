@@ -319,6 +319,16 @@ app.get("/health", async (req, res) => {
 // This is my endpoint for when a user tries to log in.
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
+
+  if (typeof email !== "string" || typeof password !== "string") {
+    return res
+      .status(400)
+      .json({
+        error:
+          "Invalid credentials entered! Please use your email and password only.",
+      });
+  }
+
   try {
     await sodium.ready;
     // First, I'll find the user in my database by their email.
@@ -461,6 +471,10 @@ app.post("/api/otp/verify-otp", async (req, res) => {
 // This is the first step of the password reset flow. The user provides their email.
 app.post("/api/forgot-password", async (req, res) => {
   const { email } = req.body;
+
+  if (typeof email !== "string") {
+    return res.status(400).json({ error: "Invalid email entered!" });
+  }
 
   try {
     const user = await User.findOne({ email });

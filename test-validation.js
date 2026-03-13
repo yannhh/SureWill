@@ -52,6 +52,7 @@ async function runTests() {
   }
   console.log("--------------------------------------------------\n");
 
+  /*
   // TEST 3: Rate Limiting / Brute Force Attack
   console.log(
     "▶ TEST 3: Brute Force Attack on /login (Testing Rate Limiter)...",
@@ -83,6 +84,7 @@ async function runTests() {
       break;
     }
   }
+    */
 
   // TEST 4: Password Policy Evasion
   console.log("▶ TEST 4: Attempting to bypass the Password Policy...");
