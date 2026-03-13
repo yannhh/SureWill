@@ -338,10 +338,10 @@ app.post("/api/beneficiary/request-otp", async (req, res) => {
     beneficiary.otp_expires = new Date(Date.now() + 10 * 60000); // 10 minutes
     await beneficiary.save();
 
-    // Mock TWILIO SMS integration (not production yet)
+    // Mock twilio SMS integration (not production yet)
     // production would cost money, this should be enough for the dissertation
-    console.log(`\n[TWILIO MOCK SMS] Sent to ${beneficiary.phone_number}:`);
-    console.log(`"Your SureWill Heir Portal security code is: ${otp}"\n`);
+    console.log(`\nTwilio SMS: Sent to ${beneficiary.phone_number}:`);
+    console.log(`"Your Heir Portal security code is: ${otp}"\n`);
 
     res.json({ message: "OTP has been sent to your phne." });
   } catch (err) {
@@ -374,7 +374,6 @@ app.post("/api/beneficiary/claims", async (req, res) => {
     beneficiary.otp_code = undefined;
     await beneficiary.save();
 
-    // FIXED: Decrypt shards from AES-256 storage before sending to heir
     const decryptedClaims = beneficiary.assigned_assets.map((claim: any) => ({
       assetId: claim.assetId,
       shard: decryptionAtRest(claim.shard),
@@ -723,7 +722,7 @@ app.get("/api/beneficiary/claims/:email", async (req, res) => {
       return res.status(404).json({ error: "No beneficiary found." });
     }
 
-    // Only return the shards if the Dead Man's Switch has been triggered
+    // It will only return the shards if the Dead Man's Switch has been triggered
     if (!beneficiary.access_granted) {
       return res.status(403).json({
         error: "Access Denied. The vault is still locked by the owner.",

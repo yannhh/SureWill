@@ -31,17 +31,25 @@ export const Dashboard = ({
   const [heirCount, setHeirCount] = useState(0);
   const [assetCount, setAssetCount] = useState(0);
   const [assetRefresh, setAssetRefresh] = useState(0);
+  const [estatePreference, setEstatePreference] = useState("standard");
 
   const fetchStats = async () => {
     try {
-      const [benRes, assetRes] = await Promise.all([
+      const [benRes, assetRes, userRes] = await Promise.all([
         fetch(`/api/beneficiaries/${userId}`),
         fetch(`/api/vault/list/${userId}`),
+        fetch(`/api/user/${userId}`),
       ]);
       const bens = await benRes.json();
       const assets = await assetRes.json();
+
       setHeirCount(bens.length || 0);
       setAssetCount(assets.length || 0);
+
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setEstatePreference(userData.estatePreference || "standard");
+      }
     } catch (err) {
       console.error("Failed to sync stats", err);
     }
@@ -53,17 +61,29 @@ export const Dashboard = ({
 
   const checklist = [
     { label: "Account secured with MFA", done: true, tab: "overview" },
+
     {
       label: "Heirs registered in trust",
       done: heirCount > 0,
       tab: "beneficiaries",
     },
     { label: "Assets encrypted & vaulted", done: assetCount > 0, tab: "vault" },
-    {
-      label: "Shards distributed to heirs",
-      done: assetCount > 0 && heirCount > 0,
-      tab: "beneficiaries",
-    },
+
+    ...(estatePreference !== "sharia"
+      ? [
+          {
+            label: "Shards distributed to heirs",
+            done: assetCount > 0 && heirCount > 0,
+            tab: "beneficiaries",
+          },
+        ]
+      : [
+          {
+            label: "Generate & Vault Faraid Will",
+            done: assetCount > 0 && heirCount > 0,
+            tab: "beneficiaries",
+          },
+        ]),
   ];
 
   const completedSteps = checklist.filter((c) => c.done).length;
