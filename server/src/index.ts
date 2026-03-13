@@ -10,15 +10,7 @@ import dbConnection from "./db";
 import { User, Asset, Beneficiary } from "./models";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
-
-// I'm defining a 'shape' for the data I expect when a user uploads a file. This helps prevent errors.
-interface VaultUploadRequest {
-  userId: number;
-  nonce: string;
-  fileName?: string;
-  fileType?: string;
-  fileSize?: number;
-}
+import rateLimit from "express-rate-limit";
 
 // I'm loading my environment variables from the .env file (like my database URL and port).
 dotenv.config();
@@ -98,13 +90,33 @@ app.use(
 // This middleware lets my server understand and parse incoming JSON data from requests.
 app.use(express.json());
 
-// To run my server on HTTPS, I need to load the key and certificate files that I generated.
+const authenticationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, //15 minute window
+  max: 10, // Limits each IP to 10 requests per window set (15 mins)
+  message: {
+    error:
+      "Locked! Too many attempts from this IP. Please try again after 15 minutes.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Applying the rate limiter to the authenticaton routes
+app.use("/api/login", authenticationRateLimiter);
+app.use("/api/register", authenticationRateLimiter);
+app.use("/api/otp/verify-otp", authenticationRateLimiter);
+app.use("/api/forgot-password", authenticationRateLimiter);
+app.use("/api/reset-password", authenticationRateLimiter);
+app.use("/api/beneficiary/request-otp", authenticationRateLimiter);
+
+// This is
+// To run the server on HTTPS, this loads the key and certificate files that in the .env file.
 const HttpsOptions = {
   key: fs.readFileSync(path.join(__dirname, "../security/localhost+2-key.pem")),
   cert: fs.readFileSync(path.join(__dirname, "../security/localhost+2.pem")),
 };
 
-// I'm creating a single, reusable transporter for sending emails.
+// Creating a single, reusable transporter for sending emails.
 // It will use a real SMTP service if you provide credentials in your .env file.
 // Otherwise, it falls back to Ethereal for local development.
 let transporter: nodemailer.Transporter;
@@ -298,7 +310,7 @@ app.post("/api/login", async (req, res) => {
     }
 
     // If the password is correct, I'll generate a random 6-digit OTP for the second factor of authentication.
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 999999).toString();
     user.otp_code = otp;
     user.otp_expires = new Date(Date.now() + 10 * 60000); // The OTP will expire in 10 minutes.
 
@@ -333,7 +345,7 @@ app.post("/api/beneficiary/request-otp", async (req, res) => {
       });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 999999).toString();
     beneficiary.otp_code = otp;
     beneficiary.otp_expires = new Date(Date.now() + 10 * 60000); // 10 minutes
     await beneficiary.save();
@@ -394,7 +406,7 @@ app.post("/api/otp/verify-otp", async (req, res) => {
   try {
     const user = await User.findById(userId);
 
-    // Here I'm checking three things: does the user exist, is the OTP they gave me the same as the one I stored, and has it not expired?
+    // Here this checks three things: does the user exist, is the OTP they gave me the same as the one I stored, and has it not expired?
     if (
       !user ||
       user.otp_code !== otp ||
@@ -407,14 +419,12 @@ app.post("/api/otp/verify-otp", async (req, res) => {
 
     // If the OTP is correct, I'll clear it from the database so it can't be used again.
     user.otp_code = undefined;
-    // I'm also updating their last_active time, which is important for my dead man's switch logic.
+    // This also updates their last_active time, which is important for the dead man's switch logic.
     user.last_active = new Date();
 
     await user.save();
 
-    console.log("Otp sent to: ", otp);
-
-    // Finally, I grant them access.
+    // Finally, granting them access.
     res.json({
       message: "MFA Success. Access Granted.",
       user: { id: user._id, username: user.username },
@@ -483,10 +493,10 @@ app.post("/api/reset-password", async (req, res) => {
 });
 
 /**
- * When a user uploads the file, I'm doing these:
+ * When a user uploads a file:
  * Their shards are encrypted before saving (which is the Encryption At Rest)
- * I store the file metadata.
- * I update their last_active timestamp so the Dead Man's Switch knows they are active and still present.
+ * Store the file metadata.
+ * Update their last_active timestamp so the Dead Man's Switch knows they are active and still present.
  */
 app.post("/api/vault/upload", async (req, res) => {
   const {
@@ -503,6 +513,12 @@ app.post("/api/vault/upload", async (req, res) => {
     fileSize,
     ...rest
   } = req.body;
+
+  if (!shards || !Array.isArray(shards) || shards.length === 0) {
+    return res.status(400).json({
+      error: "Invalid request! Cryptographic shards are missing or invalid.",
+    });
+  }
 
   try {
     const encryptedShards = shards.map((s: string) => encryptionAtRest(s));
@@ -650,6 +666,24 @@ app.post("/api/beneficiaries", async (req, res) => {
   }
 });
 
+// This endpoint allows the user to remove/delete a beneficiary.
+app.delete("/api/beneficiaries/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deletedBeneficiary = await Beneficiary.findByIdAndDelete(id);
+
+    if (!deletedBeneficiary) {
+      return res.status(404).json({ error: "Beneficiary not found." });
+    }
+
+    res.status(200).json({ message: "Beneficiary has been removed." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error deleting the beneficiary" });
+  }
+});
+
 // This endpoint allows the user to see all the beneficiaries they have. Basically, a helper for assigning a specific asset
 app.get("/api/beneficiaries/:userId", async (req, res) => {
   try {
@@ -665,7 +699,7 @@ app.post("/api/vault/access", async (req, res) => {
   const { assetId, beneficiaryId } = req.body;
 
   try {
-    // 1. Locate the asset in the vault
+    // Locates the asset in the vault
     const asset = await Asset.findById(assetId);
 
     // Updating this to stop the backend from popping the system shard (index 0)
@@ -682,7 +716,7 @@ app.post("/api/vault/access", async (req, res) => {
       return res.status(400).json({ error: "Beneficiary not found." });
     }
 
-    //3. Preventing duplicate assignments
+    // Prevents creating duplicate assignments
     const alreadyAssigned = beneficiary.assigned_assets.some(
       (a: any) => a.assetId?.toString() === assetId,
     );

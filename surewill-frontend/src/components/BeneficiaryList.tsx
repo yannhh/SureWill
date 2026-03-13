@@ -175,9 +175,28 @@ const BeneficiaryList: React.FC<{
   };
 
   const handleDelete = async (benId: string) => {
-    alert(
-      "Just like the Vault, we need to add a DELETE route to index.ts before this button works!",
-    );
+    // Confirmation message to the user if they are deleting someone
+    if (!window.confirm("Are you sure you want to delete this beneficiary?"))
+      return;
+
+    try {
+      const res = await fetch(`/api/beneficiaries/${benId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setStatus("Heir has been removed.");
+        fetchData(); // Refreshing the list in the UI
+        onBeneficiaryAdded(); // This will update the progress bar in the main dashboard screen of the user
+        setTimeout(() => setStatus(""), 3000);
+      } else {
+        const data = await res.json();
+        setStatus(data.error || "Failed to remove the heir.");
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus("Server error while deleting");
+    }
   };
 
   if (loading)
@@ -498,7 +517,7 @@ const BeneficiaryList: React.FC<{
             setShowForm(true);
             setForm(EMPTY(estatePreferences));
           }}
-          className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-white text-sm font-medium transition-all hover:-translate-y-0.5"
+          className="mb-5 flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-white text-sm font-medium transition-all hover:-translate-y-0.5"
           style={{
             background: "linear-gradient(135deg, #7B9E87, #4A7A5A)",
             boxShadow: "0 8px 20px rgba(123,158,135,0.3)",

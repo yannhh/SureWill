@@ -51,7 +51,7 @@ const assetsSchema = new Schema({
  * These are the heirs of the users.
  * The assigned_assets array is most important because it maps a specific beneficiary to a specific shard of a specific file.
  */
-const benefeciarySchema = new Schema({
+const beneficiarySchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   full_name: String,
   email: String,
@@ -70,4 +70,4 @@ const benefeciarySchema = new Schema({
 
 export const User = mongoose.model("User", userSchema);
 export const Asset = mongoose.model("Asset", assetsSchema);
-export const Beneficiary = mongoose.model("Beneficiary", benefeciarySchema);
+export const Beneficiary = mongoose.model("Beneficiary", beneficiarySchema);

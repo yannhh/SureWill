@@ -128,7 +128,7 @@ const VaultUpload: React.FC<{
       );
     }
 
-    // Math rule: You can't require more shards than you actually created.
+    // This is the math rule, so the user can't exceed the total shards they created
     if (kThreshold > nTotal)
       return setStatusMsg(
         "Error: Required (k) cannot exceed Total Shards (n)!",
@@ -139,7 +139,7 @@ const VaultUpload: React.FC<{
 
     // The Cryptography
     try {
-      // I initialize Libsodium before using any random number generators.
+      // Initializing Libsodium before using any random number generators.
       await _sodium.ready;
       const sodium = _sodium;
 
@@ -160,7 +160,7 @@ const VaultUpload: React.FC<{
 
       /**
        * Shamir's Secret Sharing
-       * This is where I split the master key into pieces
+       * This is where the master key is split into pieces
        * It is converted to hex strings so they can be stored as text in the DB.
        */
       const shards = await split(masterKey, nTotal, kThreshold);
@@ -168,7 +168,7 @@ const VaultUpload: React.FC<{
 
       /**
        * Data Encryption (using SecretBox)
-       * I use XSalsa20-Poly1305 (secretbox) for the encryption.
+       * This uses XSalsa20-Poly1305 (secretbox) for the encryption.
        * The nonce is a number used once to ensure the same file
        * encrypted twice has a different ciphertext.
        */
@@ -185,7 +185,7 @@ const VaultUpload: React.FC<{
 
       /**
        * The Digital Signature and Integrity
-       * I create a SHA-256 hash of the original file.
+       * Creating a SHA-256 hash of the original file.
        * This acts as the unique fingerprint to detect tampering later.
        */
       setStatusMsg("Generating Anti-Forgery Fingerprint..");
@@ -195,7 +195,7 @@ const VaultUpload: React.FC<{
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
-      // I get the user's private identity key from session memory.
+      // Gets the user's private identity key from session memory.
       const privateKeyHex = sessionStorage.getItem("surewill_identity_key");
 
       if (!privateKeyHex) {
@@ -214,7 +214,7 @@ const VaultUpload: React.FC<{
       const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
 
       /**
-       * Finally, I sign the file hash.
+       * Finally signing the file hash.
        * This proves that ONLY this user could have uploaded this specific file.
        */
       const signature = sodium.crypto_sign_detached(
@@ -452,7 +452,7 @@ const VaultUpload: React.FC<{
 
       {items.length === 0 && !showForm && (
         <div
-          className="text-center py-16 border-2 border-dashed rounded-3xl"
+          className="mb-10 text-center py-16 border-2 border-dashed rounded-3xl"
           style={{ borderColor: "#E8E3DC" }}
         >
           <Lock
