@@ -84,6 +84,66 @@ async function runTests() {
     }
   }
 
+  // TEST 4: Password Policy Evasion
+  console.log("▶ TEST 4: Attempting to bypass the Password Policy...");
+  try {
+    const res4 = await fetch(`${API_URL}/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "testuser2",
+        email: "test2@test.com",
+        password: "weakpassword", // Fails the number and special character check
+      }),
+    });
+    const data4 = await res4.json();
+    console.log(`  ↳ Status: HTTP ${res4.status} (Should be 400)`);
+    console.log(`  ↳ Server Reply:`, data4);
+  } catch (err) {
+    console.log(`  ↳ Network Error:`, err.message);
+  }
+  console.log("--------------------------------------------------\n");
+
+  // TEST 5: NoSQL Injection Attack (OWASP Top 10)
+  console.log("▶ TEST 5: NoSQL Injection on /forgot-password...");
+  console.log(
+    "  ↳ Sending a MongoDB Operator {$ne: null} instead of an email string...",
+  );
+  try {
+    const res5 = await fetch(`${API_URL}/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        // A hacker trick! Asking the DB to find an email that is "Not Equal to Null"
+        email: { $ne: null },
+      }),
+    });
+
+    // If this returns HTTP 200, your database is vulnerable to NoSQL Injection!
+    console.log(`  ↳ Status: HTTP ${res5.status}`);
+    const text5 = await res5.text();
+    console.log(`  ↳ Server Reply:`, text5);
+  } catch (err) {
+    console.log(`  ↳ Network Error:`, err.message);
+  }
+  console.log("--------------------------------------------------\n");
+
+  // TEST 6: The "Ghost" Payload (Empty Data)
+  console.log("▶ TEST 6: Sending an empty request to /login...");
+  try {
+    const res6 = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}), // Absolutely blank payload
+    });
+    const data6 = await res6.json();
+    console.log(`  ↳ Status: HTTP ${res6.status}`);
+    console.log(`  ↳ Server Reply:`, data6);
+  } catch (err) {
+    console.log(`  ↳ Network Error:`, err.message);
+  }
+  console.log("--------------------------------------------------\n");
+
   console.log("--------------------------------------------------\n");
   console.log("🏁 Pentest Complete. Review the server replies above!");
 }

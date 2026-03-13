@@ -529,7 +529,7 @@ app.post("/api/reset-password", async (req, res) => {
     );
 
     user.password_hash = hashedPassword;
-    // I'm clearing the reset token so it can't be used again. This is very important!
+    // Clears the reset token so it CANT be used again.
     user.reset_token = undefined;
     user.reset_expires = undefined;
     await user.save();
@@ -570,7 +570,7 @@ app.post("/api/vault/upload", async (req, res) => {
 
   try {
     const encryptedShards = shards.map((s: string) => encryptionAtRest(s));
-    // I'm creating a new document in my 'assets' collection with all the file details.
+    // Creating a new document in my assets collection with all the file details.
     const newAsset = new Asset({
       userId,
       encrypted_data: encryptedData,
@@ -589,7 +589,7 @@ app.post("/api/vault/upload", async (req, res) => {
 
     await newAsset.save();
 
-    // Every time the user uploads, I'll update their 'last_active' timestamp.
+    // Every time the user uploads, This will update their last_active timestamp.
     await User.findByIdAndUpdate(userId, { last_active: new Date() });
 
     res
@@ -624,7 +624,7 @@ app.get("/api/vault/list/:userId", async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // I'll find all assets that belong to this user and sort them by creation date.
+    // Finds all assets that belong to this user and sort them by creation date.
     const assets = await Asset.find({ userId }).sort({ created_at: -1 });
     res.json(assets);
   } catch (err) {
@@ -652,7 +652,7 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
 
     let systemShard = null;
 
-    // Security Point: The shard will only be released if the Dead Man's Switch has been triggered
+    // Security; The shard will only be released if the Dead Man's Switch has been triggered
     if (beneficiary && beneficiary.access_granted) {
       // Get the first shard remaining in the asset as the system shard
       systemShard = decryptionAtRest(asset.shards[0]);
@@ -693,7 +693,7 @@ app.post("/api/beneficiaries", async (req, res) => {
   const { userId, fullName, email, relationship, phone } = req.body;
 
   try {
-    // I'm creating a new beneficiary document and linking it to the user.
+    // Creating a new beneficiary document and linking it to the user.
     const newBeneficiary = new Beneficiary({
       userId,
       full_name: fullName,
@@ -751,14 +751,14 @@ app.post("/api/vault/access", async (req, res) => {
     const asset = await Asset.findById(assetId);
 
     // Updating this to stop the backend from popping the system shard (index 0)
-    // I'm basically creating a permanent reserve of the last shard for the system here
+    // Basically creating a permanent reserve of the last shard for the system here
     if (!asset || !asset.shards || asset.shards.length <= 1) {
       return res
         .status(400)
         .json({ error: "No cryptographic shards were found for this asset." });
     }
 
-    //2. Find the beneficiary
+    // Find the beneficiary
     const beneficiary = await Beneficiary.findById(beneficiaryId);
     if (!beneficiary) {
       return res.status(400).json({ error: "Beneficiary not found." });
@@ -860,7 +860,7 @@ app.get("/api/acknowledge/:userId", async (req, res) => {
   }
 });
 
-// Finally, I'm starting my server. Instead of app.listen, I'm using https.createServer to run it over HTTPS.
+// Finally starting my server. Instead of app.listen, I'm using https.createServer to run it over HTTPS.
 https.createServer(HttpsOptions, app).listen(PORT, () => {
   console.log(`[SECURE] SureWill Backend: https://localhost:${PORT}`);
 });
