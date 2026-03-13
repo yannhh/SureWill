@@ -845,7 +845,7 @@ app.get("/api/acknowledge/:userId", async (req, res) => {
   const { userId } = req.params;
 
   try {
-    // I'll find the user by their ID and update their status back to "active" and reset their 'last_active' timestamp.
+    // Finds the user by their ID and update their status back to active and reset their last_active timestamp.
     const user = await User.findByIdAndUpdate(
       userId,
       {
@@ -859,7 +859,7 @@ app.get("/api/acknowledge/:userId", async (req, res) => {
       return res.status(404).send("<h1>Error!</h1><p>User not found.</p>");
     }
 
-    // I'm just sending back a simple HTML page to confirm that everything is okay.
+    // Just sending back a simple HTML page to confirm that everything is okay with the user.
     res.send(`
             <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
                 <h1>Welcome Back, ${user.username}!</h1>
