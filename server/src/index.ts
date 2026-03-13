@@ -19,6 +19,11 @@ dbConnection();
 
 // Creating my main Express application.
 const app = express();
+
+// This will tell express to trust my proxy.
+// I'm getting terminal errors because the rate limiter header doensn't trust React
+app.set("trust proxy", 1);
+
 // Gets the port from my .env file, or just use 5050 if it's not set.
 const PORT = process.env.PORT || 5050;
 
