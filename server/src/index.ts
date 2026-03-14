@@ -11,8 +11,46 @@ import { User, Asset, Beneficiary } from "./models";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
+import { AssertionError } from "assert/strict";
 
-// I'm loading my environment variables from the .env file (like my database URL and port).
+/**
+ *
+ * @param req
+ * @param res
+ * @param next
+ *
+ * Security Middle for anti IDOR vulnerability
+ * This verify token function will act as the security guard for the api endpoints.
+ * Instead of trusting the URL to verify the user, this asks for a cryptography signed JSON web token from the user.
+ */
+const verifyToken = (req: any, res: any, next: any) => {
+  // The frontend sends the token in the Auth header
+  const authenticationHeader = req.headers.authorization;
+  const token = authenticationHeader && authenticationHeader.split(" ")[1];
+
+  // If they didn't bring their token, they are denied access.
+  if (!token) {
+    return res.status(401).json({ error: "Access denied. No session token." });
+  }
+
+  try {
+    // Uses the secret key in the .env file to verify the token
+    const verified = jwt.verify(token, process.env.JWT_SECRET as string);
+
+    // If verified, this will get the actual user's ID from the token payload and attaches it to the get request.
+    // All the routes will finally know which specific user is making the request.
+    req.userId = (verified as any).id;
+
+    // Proceeds the user to their desired endpoint request
+    next();
+  } catch (err) {
+    // If the token is fake or expired.
+    res.status(403).json({ error: "Invalid or expired session token." });
+  }
+};
+
+// Loading my environment variables from the .env file, like my database URL and port.
 dotenv.config();
 // This function from my db.ts file will connect to my MongoDB database.
 dbConnection();
@@ -462,6 +500,14 @@ app.post("/api/otp/verify-otp", async (req, res) => {
 
     await user.save();
 
+    /**
+     * JWT when successfully accessing
+     * This token is signed by the server and expires in 2 hours to limit hijack window
+     */
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, {
+      expiresIn: "2h",
+    });
+
     // Finally, granting them access.
     res.json({
       message: "MFA Success. Access Granted.",
@@ -564,9 +610,8 @@ app.post("/api/reset-password", async (req, res) => {
  * Store the file metadata.
  * Update their last_active timestamp so the Dead Man's Switch knows they are active and still present.
  */
-app.post("/api/vault/upload", async (req, res) => {
+app.post("/api/vault/upload", verifyToken, async (req: any, res: any) => {
   const {
-    userId,
     encryptedData,
     nonce,
     shards,
@@ -579,6 +624,8 @@ app.post("/api/vault/upload", async (req, res) => {
     fileSize,
     ...rest
   } = req.body;
+
+  const userId = req.userId;
 
   if (!shards || !Array.isArray(shards) || shards.length === 0) {
     return res.status(400).json({
@@ -620,15 +667,29 @@ app.post("/api/vault/upload", async (req, res) => {
 });
 
 // This endpoint allows the user to delete their asset from the frontend
-app.delete("/api/vault/delete/:id", async (req, res) => {
+app.delete("/api/vault/delete/:id", verifyToken, async (req: any, res: any) => {
   try {
     const { id } = req.params;
 
-    const deletedAsset = await Asset.findByIdAndDelete(id);
+    // Finds the asset the user wants to delete.
+    const asset = await Asset.findById(id);
 
-    if (!deletedAsset) {
+    if (!asset) {
       return res.status(404).json({ error: "Asset not found." });
     }
+
+    // Checking if the user is the actual owner of the asset using their web token
+    if (asset.userId.toString() !== req.userId) {
+      console.warn(
+        `Deletion attempt blocked. User ${req.userId} tried to delete Asset ${id}`,
+      );
+      return res
+        .status(403)
+        .json({ error: "Access Denied! You don't own this asset." });
+    }
+
+    // If the ownership check passes then the it will be deleted.
+    await Asset.findByIdAndDelete(id);
 
     res.status(200).json({ message: "Asset deleted successfully." });
   } catch (err) {
@@ -638,12 +699,12 @@ app.delete("/api/vault/delete/:id", async (req, res) => {
 });
 
 // This endpoint lets the user see a list of all the files they own.
-app.get("/api/vault/list/:userId", async (req, res) => {
-  const { userId } = req.params;
-
+app.get("/api/vault/list", verifyToken, async (req: any, res: any) => {
   try {
     // Finds all assets that belong to this user and sort them by creation date.
-    const assets = await Asset.find({ userId }).sort({ created_at: -1 });
+    const assets = await Asset.find({ userId: req.userId }).sort({
+      created_at: -1,
+    });
     res.json(assets);
   } catch (err) {
     console.error(err);
@@ -707,8 +768,10 @@ app.get("/api/vault/download/:assetId", async (req, res) => {
 });
 
 // This endpoint allows a user to add a beneficiary to their account.
-app.post("/api/beneficiaries", async (req, res) => {
-  const { userId, fullName, email, relationship, phone } = req.body;
+app.post("/api/beneficiaries", verifyToken, async (req: any, res: any) => {
+  const { fullName, email, relationship, phone } = req.body;
+
+  const userId = req.userId;
 
   try {
     // Creating a new beneficiary document and linking it to the user.
@@ -733,45 +796,60 @@ app.post("/api/beneficiaries", async (req, res) => {
 });
 
 // This endpoint allows the user to remove/delete a beneficiary.
-app.delete("/api/beneficiaries/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+app.delete(
+  "/api/beneficiaries/:id",
+  verifyToken,
+  async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
 
-    const beneficiary = await Beneficiary.findById(id);
+      // Find the beneficiary
+      const beneficiary = await Beneficiary.findById(id);
 
-    if (!beneficiary) {
-      return res.status(404).json({ error: "Beneficiary not found." });
-    }
+      if (!beneficiary) {
+        return res.status(404).json({ error: "Beneficiary not found." });
+      }
 
-    // When removing a beneficiary, this ensures that the shard returns to the vault and doesn't just pop and disappear.
-    // The shard will go back to the vault and can be assigned to someone else, instead of just disappearing with the delete heir.
-    if (
-      beneficiary?.assigned_assets &&
-      beneficiary?.assigned_assets.length > 0
-    ) {
-      for (const claim of beneficiary.assigned_assets) {
-        await Asset.findByIdAndDelete(claim.assetId, {
-          $push: { shards: claim.shard },
+      if (beneficiary.userId.toString() !== req.userId) {
+        console.warn(
+          `Delete attempt blocked. This beneficiary is not part of your account.`,
+        );
+        return res.status(403).json({
+          error:
+            "Access Denied! This beneficiary is not registered under your account.",
         });
       }
+
+      // When removing a beneficiary, this ensures that the shard returns to the vault and doesn't just pop and disappear.
+      // The shard will go back to the vault and can be assigned to someone else, instead of just disappearing with the delete heir.
+      if (
+        beneficiary?.assigned_assets &&
+        beneficiary?.assigned_assets.length > 0
+      ) {
+        for (const claim of beneficiary.assigned_assets) {
+          await Asset.findByIdAndUpdate(claim.assetId, {
+            $push: { shards: claim.shard },
+          });
+        }
+      }
+
+      await Beneficiary.findByIdAndDelete(id);
+
+      res.status(200).json({
+        message:
+          "Beneficiary has been removed and shard has been put back to the vault.",
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Error deleting the beneficiary" });
     }
-
-    await Beneficiary.findByIdAndDelete(id);
-
-    res.status(200).json({
-      message:
-        "Beneficiary has been removed and shard has been put back to the vault.",
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error deleting the beneficiary" });
-  }
-});
+  },
+);
 
 // This endpoint allows the user to see all the beneficiaries they have. Basically, a helper for assigning a specific asset
-app.get("/api/beneficiaries/:userId", async (req, res) => {
+app.get("/api/beneficiaries", verifyToken, async (req: any, res: any) => {
   try {
-    const list = await Beneficiary.find({ userId: req.params.userId });
+    const list = await Beneficiary.find({ userId: req.userId });
     res.json(list);
   } catch (err) {
     res.status(500).json({ error: "Failed to get beneficiaries." });
@@ -779,12 +857,19 @@ app.get("/api/beneficiaries/:userId", async (req, res) => {
 });
 
 // This endpoint is for assigning a specific asset to a specific beneficiary.
-app.post("/api/vault/access", async (req, res) => {
+app.post("/api/vault/access", verifyToken, async (req: any, res: any) => {
   const { assetId, beneficiaryId } = req.body;
 
   try {
     // Locates the asset in the vault
     const asset = await Asset.findById(assetId);
+
+    // Anti IDOR Patch
+    if (asset && asset.userId.toString() !== req.userId) {
+      return res
+        .status(403)
+        .json({ error: "Access Denied! You don't own this asset." });
+    }
 
     // Updating this to stop the backend from popping the system shard (index 0)
     // Basically creating a permanent reserve of the last shard for the system here
