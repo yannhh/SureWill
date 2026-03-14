@@ -17,13 +17,7 @@ import BeneficiaryList from "./BeneficiaryList";
 
 const MotionDiv = motion.div;
 
-export const Dashboard = ({
-  userId,
-  logout,
-}: {
-  userId: string;
-  logout: () => void;
-}) => {
+export const Dashboard = ({ logout }: { logout: () => void }) => {
   const [activeTab, setActiveTab] = useState("overview");
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -34,11 +28,19 @@ export const Dashboard = ({
   const [estatePreference, setEstatePreference] = useState("standard");
 
   const fetchStats = async () => {
+    // IDOR Patch
+    // Gets the token from the session storage
     try {
+      const token = sessionStorage.getItem("surewill_jwt");
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+
       const [benRes, assetRes, userRes] = await Promise.all([
-        fetch(`/api/beneficiaries/${userId}`),
-        fetch(`/api/vault/list/${userId}`),
-        fetch(`/api/user/${userId}`),
+        fetch(`/api/beneficiaries`, { headers }),
+        fetch(`/api/vault/list`, { headers }),
+        fetch(`/api/user/profile`, { headers }),
       ]);
       const bens = await benRes.json();
       const assets = await assetRes.json();
@@ -57,7 +59,7 @@ export const Dashboard = ({
 
   useEffect(() => {
     fetchStats();
-  }, [userId, assetRefresh]);
+  }, [assetRefresh]);
 
   const checklist = [
     { label: "Account secured with MFA", done: true, tab: "overview" },
@@ -352,7 +354,6 @@ export const Dashboard = ({
             animate={{ opacity: 1, y: 0 }}
           >
             <VaultUpload
-              userId={userId}
               heirCount={heirCount}
               onAssetUploaded={() => {
                 setAssetRefresh((prev) => prev + 1);
@@ -369,7 +370,6 @@ export const Dashboard = ({
             animate={{ opacity: 1, y: 0 }}
           >
             <BeneficiaryList
-              userId={userId}
               onBeneficiaryAdded={fetchStats}
               assetRefresh={assetRefresh}
             />

@@ -12,7 +12,6 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
-import { AssertionError } from "assert/strict";
 
 /**
  *
@@ -332,9 +331,9 @@ app.post("/api/register", async (req, res) => {
 
 // Fetch User Profile
 // The frontend needs this so it can show the Sharia Will Generator (if the user is Muslim).
-app.get("/api/user/:id", async (req, res) => {
+app.get("/api/user/profile", verifyToken, async (req: any, res: any) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
@@ -537,7 +536,7 @@ app.post("/api/forgot-password", async (req, res) => {
     await user.save();
 
     // hardcoded the full reset URL and send it to the user's email because I'm getting API
-    const resetURL = `http://127.0.0.1:5500/reset-password.html?token=${token}`;
+    const resetURL = `http://localhost:3000/reset-password?token=${token}`;
     await sendResetEmail(user.email as string, resetURL);
 
     res.json({ message: "Password reset link has been sent to your email." });
@@ -649,7 +648,7 @@ app.post("/api/vault/upload", verifyToken, async (req: any, res: any) => {
       file_name: fileName,
       file_type: fileType,
       file_size: fileSize,
-      ...rest,
+      unlock_condition: rest.unlockCondition,
     });
 
     await newAsset.save();
@@ -885,6 +884,12 @@ app.post("/api/vault/access", verifyToken, async (req: any, res: any) => {
       return res.status(400).json({ error: "Beneficiary not found." });
     }
 
+    if (beneficiary.userId.toString() !== req.userId) {
+      return res
+        .status(403)
+        .json({ error: "Access Denied! You don't own this beneficiary." });
+    }
+
     // Prevents creating duplicate assignments
     const alreadyAssigned = beneficiary.assigned_assets.some(
       (a: any) => a.assetId?.toString() === assetId,
@@ -911,40 +916,6 @@ app.post("/api/vault/access", verifyToken, async (req: any, res: any) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error assigning shard to the asset." });
-  }
-});
-
-// Get the assets and shards assigned to a specific beneficiary
-app.get("/api/beneficiary/claims/:email", async (req, res) => {
-  const { email } = req.params;
-
-  try {
-    const beneficiary = await Beneficiary.findOne({ email });
-
-    if (!beneficiary) {
-      return res.status(404).json({ error: "No beneficiary found." });
-    }
-
-    // It will only return the shards if the Dead Man's Switch has been triggered
-    if (!beneficiary.access_granted) {
-      return res.status(403).json({
-        error: "Access Denied. The vault is still locked by the owner.",
-      });
-    }
-
-    // Now it is safe to decrypt and return the shards
-    const decryptedClaims = beneficiary.assigned_assets.map((claim: any) => ({
-      assetId: claim.assetId,
-      shard: decryptionAtRest(claim.shard), // Decrypting from AES-256 storage
-    }));
-
-    res.json({
-      fullName: beneficiary.full_name,
-      claims: decryptedClaims,
-    });
-  } catch (err) {
-    console.error("Claims Error:", err);
-    res.status(500).json({ error: "Server error getting the claims." });
   }
 });
 

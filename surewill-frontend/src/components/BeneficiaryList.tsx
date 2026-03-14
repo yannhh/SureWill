@@ -51,14 +51,12 @@ const EMPTY = (pref: string) => ({
   relationship: pref === "sharia" ? "son" : "child",
   email: "",
   phone: "",
-  notes: "",
 });
 
 const BeneficiaryList: React.FC<{
-  userId: string;
   onBeneficiaryAdded: () => void;
   assetRefresh: number;
-}> = ({ userId, onBeneficiaryAdded, assetRefresh }) => {
+}> = ({ onBeneficiaryAdded, assetRefresh }) => {
   const [assets, setAssets] = useState<any[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,14 +74,18 @@ const BeneficiaryList: React.FC<{
 
   useEffect(() => {
     fetchData();
-  }, [userId, assetRefresh]);
+  }, [assetRefresh]);
 
   const fetchData = async () => {
     try {
+      // IDOR Patch
+      const token = sessionStorage.getItem("surewill_jwt");
+      const headers = { Authorization: `Bearer ${token}` };
+
       const [assetRes, benRes, userRes] = await Promise.all([
-        fetch(`/api/vault/list/${userId}`),
-        fetch(`/api/beneficiaries/${userId}`),
-        fetch(`/api/user/${userId}`),
+        fetch(`/api/vault/list`, { headers }),
+        fetch(`/api/beneficiaries`, { headers }),
+        fetch(`/api/user/profile`, { headers }),
       ]);
 
       setAssets(await assetRes.json());
@@ -111,11 +113,16 @@ const BeneficiaryList: React.FC<{
     setStatus("");
 
     try {
+      // IDOR Patch
+      const token = sessionStorage.getItem("surewill_jwt");
+
       const res = await fetch("/api/beneficiaries", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          userId,
           fullName: form.full_name,
           email: form.email,
           phone: form.phone,
@@ -149,9 +156,16 @@ const BeneficiaryList: React.FC<{
     setAssignStatus("Assigning cryptographic shard...");
 
     try {
+      // IDOR Patch
+      const token = sessionStorage.getItem("surewill_jwt");
+
       const res = await fetch("/api/vault/access", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+
         body: JSON.stringify({
           assetId: selectedAsset,
           beneficiaryId: selectedBeneficiary,
@@ -180,8 +194,12 @@ const BeneficiaryList: React.FC<{
       return;
 
     try {
+      // IDOR Patch
+      const token = sessionStorage.getItem("surewill_jwt");
+
       const res = await fetch(`/api/beneficiaries/${benId}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.ok) {

@@ -48,10 +48,9 @@ const EMPTY = {
 };
 
 const VaultUpload: React.FC<{
-  userId: string;
   heirCount: number;
   onAssetUploaded: () => void;
-}> = ({ userId, heirCount, onAssetUploaded }) => {
+}> = ({ heirCount, onAssetUploaded }) => {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -70,7 +69,12 @@ const VaultUpload: React.FC<{
 
   const fetchItems = async () => {
     try {
-      const res = await fetch(`/api/vault/list/${userId}`);
+      // IDOR Patch
+      const token = sessionStorage.getItem("surewill_jwt");
+
+      const res = await fetch(`/api/vault/list`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       setItems(data || []);
       setLoading(false);
@@ -89,9 +93,14 @@ const VaultUpload: React.FC<{
       return;
 
     try {
+      // IDOR Patch
+      const token = sessionStorage.getItem("surewill_jwt");
+
       const res = await fetch(`/api/vault/delete/${itemId}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
+
       if (res.ok) {
         setItems((prev) => prev.filter((i) => i._id !== itemId));
         onAssetUploaded(); // This updates the dashboard progress bar
@@ -105,7 +114,7 @@ const VaultUpload: React.FC<{
 
   useEffect(() => {
     fetchItems();
-  }, [userId]);
+  }, []);
 
   const handleSave = async () => {
     setStatusMsg("");
@@ -224,11 +233,17 @@ const VaultUpload: React.FC<{
 
       // The secure upload
       setStatusMsg("Uploading to Secure Vault...");
+
+      //IDOR Patch token key
+      const token = sessionStorage.getItem("surewill_jwt");
+
       const res = await fetch("/api/vault/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          userId,
           encryptedData: encryptedBase64,
           nonce: nonceBase64,
           shards: hexShards, // These shards are sent to be further encrypted by the server, showcasing Defense in Depth.
