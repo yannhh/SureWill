@@ -185,6 +185,7 @@ export const Auth = ({
         }
       } else if (mode === "otp") {
         if (res.ok) {
+          sessionStorage.setItem("surewill_jwt", data.token);
           setUserId(tempUserId);
         } else {
           setError("Invalid or expired code.");
