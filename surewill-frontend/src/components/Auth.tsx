@@ -267,7 +267,7 @@ export const Auth = ({
       className="min-h-screen flex flex-col"
       style={{ backgroundColor: "#FAF7F2", fontFamily: "'Inter', sans-serif" }}
     >
-      {/* Navigation Header */}
+      {/* Nav Header */}
       <header className="w-full flex justify-between items-center p-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-2 text-[#4A7A5A]">
           <Shield className="w-6 h-6" />
@@ -300,9 +300,8 @@ export const Auth = ({
         </div>
       </header>
 
-      {/* Main Split Layout */}
+      {/*The layout splitter */}
       <main className="flex-1 flex flex-col lg:flex-row items-center justify-between max-w-6xl mx-auto w-full px-6 gap-12 lg:gap-24 mt-10 lg:mt-16 pb-12">
-        {/* Left Section: Value Proposition */}
         <div className="flex-1 max-w-lg">
           <p className="text-[#7B9E87] text-xs font-bold tracking-widest uppercase mb-4">
             Zero-Knowledge Estate Vault
@@ -333,7 +332,6 @@ export const Auth = ({
           </div>
         </div>
 
-        {/* Right Section: Authentication Interface */}
         <div className="w-full max-w-md relative">
           <div
             className="rounded-3xl p-8 relative overflow-hidden"
@@ -362,7 +360,7 @@ export const Auth = ({
                   {mode === "reset" && "Set New Password"}
                 </h2>
 
-                {/* System Feedback UI */}
+                {/* UI Feedbacks */}
                 {error && (
                   <div className="mb-4 p-3 rounded-xl text-xs font-medium bg-red-50 text-red-600 border border-red-100 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
@@ -382,7 +380,7 @@ export const Auth = ({
                 )}
 
                 <div className="space-y-4">
-                  {/* Security Badge for Token Authentication */}
+                  {/* Security for Token Authentication */}
                   {mode === "reset" && (
                     <div className="mb-2 p-5 rounded-2xl bg-[#F0F5F2] border border-[#B8D4BF] text-center">
                       <Shield className="w-8 h-8 text-[#4A7A5A] mx-auto mb-2 opacity-80" />
@@ -397,7 +395,7 @@ export const Auth = ({
                   )}
                   {mode === "register" && (
                     <>
-                      {/* Islamic Inheritance Configuration Toggle */}
+                      {/* Sharia Configuration */}
                       <div className="p-4 rounded-xl border border-[#E8E3DC] bg-white">
                         <label className="flex items-start gap-3 cursor-pointer">
                           <div className="relative flex items-center mt-1">
@@ -449,7 +447,7 @@ export const Auth = ({
                     </>
                   )}
 
-                  {/* Email Input is active during login, registration, and initial password recovery */}
+                  {/* Email Input is active during login, registration, and password recovery */}
                   {(mode === "login" ||
                     mode === "register" ||
                     mode === "forgot") && (
@@ -469,7 +467,7 @@ export const Auth = ({
                     </div>
                   )}
 
-                  {/* Password Input is active during login, registration, and the final reset stage */}
+                  {/* Password Input is active during login, registration, and then the reset flow */}
                   {(mode === "login" ||
                     mode === "register" ||
                     mode === "reset") && (
@@ -529,7 +527,7 @@ export const Auth = ({
                   )}
                 </div>
 
-                {/* Form Submission Button */}
+                {/* The submit button */}
                 <button
                   onClick={handleAction}
                   disabled={loading}
@@ -553,7 +551,7 @@ export const Auth = ({
                   )}
                 </button>
 
-                {/* Auxiliary Navigation Actions */}
+                {/* Nav Actions */}
                 <div
                   className="mt-6 text-center text-xs"
                   style={{ color: "#8C8579" }}
