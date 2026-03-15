@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { use, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield,
@@ -27,6 +27,8 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
     id: string;
     shard: string;
   } | null>(null);
+
+  const [activeAssetMetadata, setActiveAssetMetadata] = useState<any>(null);
 
   const [showCondition, setShowCondition] = useState(""); // This is for showing the unlock condition to the heir
 
@@ -98,16 +100,40 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
     setLoading(false);
   };
 
-  const handleUnlock = async () => {
-    // Using this targetId to make sure I have the right database reference, even if object names are slightly different between the frontend and backend response.
-    const targetId = activeClaim?.id || (activeClaim as any)?.assetId;
-    if (!targetId || targetId === "undefined") {
-      return setStatus({
+  // This function will fetch the asset details
+  const prepareUnlock = async (claim: any) => {
+    setLoading(true);
+    setStatus({ type: "info", msg: "Retrieving Vault Requirements..." });
+
+    try {
+      const targetId = claim.assetId;
+      const res = await fetch(`/api/vault/download/${targetId}`);
+      const asset = await res.json();
+
+      if (!asset || asset.error)
+        throw new Error(asset.error || "Failed to fetch asset.");
+      if (!asset.systemShard) {
+        throw new Error(
+          "Access Denied! The system shard is still locked. The owner is Active.",
+        );
+      }
+
+      setActiveAssetMetadata(asset);
+      setActiveClaim({ id: targetId, shard: claim.shard });
+      if (asset.unlockCondition) setShowCondition(asset.unlockCondition);
+
+      setStep("unlock");
+      setStatus({ type: "", msg: "" });
+    } catch (err: any) {
+      setStatus({
         type: "error",
-        msg: "Error: Asset ID not found. Please go back and re-select the claim.",
+        msg: err.message || "Failed to load asset details.",
       });
     }
+    setLoading(false);
+  };
 
+  const handleUnlock = async () => {
     setLoading(true);
     setStatus({
       type: "info",
@@ -116,8 +142,11 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
 
     try {
       // This fetches the secure download endpoint to get the encrypted file data and system shard.
-      const res = await fetch(`/api/vault/download/${targetId}`);
-      const asset = await res.json();
+      const asset = activeAssetMetadata;
+      if (!asset)
+        throw new Error(
+          "Asset metadata missing. Please go back and try again.",
+        );
 
       if (!asset || asset.error)
         throw new Error(asset.error || "Failed to fetch asset.");
@@ -427,15 +456,9 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
                     {claims.map((claim, idx) => (
                       <button
                         key={idx}
-                        onClick={() => {
-                          setActiveClaim({
-                            id: claim.assetId,
-                            shard: claim.shard,
-                          });
-                          setStep("unlock");
-                          setStatus({ type: "", msg: "" });
-                        }}
-                        className="w-full flex items-center justify-between p-4 rounded-xl border border-[#E8E3DC] hover:border-[#7B9E87] transition-colors group text-left"
+                        onClick={() => prepareUnlock(claim)}
+                        disabled={loading} // I won't be allowing spamming the button, might crash my server or smthn
+                        className="w-full flex items-center justify-between p-4 rounded-xl border border-[#E8E3DC] hover:border-[#7B9E87] transition-colors group text-left disabled:opacity-50"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-[#F0F5F2] flex items-center justify-center text-[#4A7A5A]">
@@ -483,39 +506,72 @@ export const PublicHeirPortal = ({ onBack }: { onBack: () => void }) => {
                     </div>
                   )}
 
-                  <div className="mb-4 p-4 rounded-xl bg-[#F0F5F2] border border-[#B8D4BF]">
-                    <p className="text-xs text-[#2D2926] mb-1">
-                      <strong>Your Primary Shard:</strong>
-                    </p>
-                    <code className="text-[10px] break-all text-[#4A7A5A] select-all block mb-2">
-                      {activeClaim.shard}
-                    </code>
-                    <p className="text-[10px] text-[#8C8579] italic">
-                      If the vault requires more than 2 shards, ask other
-                      beneficiaries for their shards and separate them with
-                      commas below.
-                    </p>
-                  </div>
+                  {/* 🛡️ DYNAMIC THRESHOLD UI */}
+                  {(() => {
+                    const threshold = activeAssetMetadata?.threshold || 2;
+                    const extraShardsNeeded = Math.max(0, threshold - 2);
 
-                  <div className="mb-6">
-                    <label className="block text-xs font-medium mb-1.5 text-[#4A453F]">
-                      Enter Cryptographic Shards
-                    </label>
-                    <textarea
-                      placeholder="e.g., 0102abcd..., 0203bcde..."
-                      className={inputClass}
-                      style={{
-                        backgroundColor: "#F5F1EC",
-                        border: "1px solid #E8E3DC",
-                        color: "#2D2926",
-                        minHeight: "100px",
-                        fontFamily: "monospace",
-                        fontSize: "11px",
-                      }}
-                      value={shardsInput}
-                      onChange={(e) => setShardsInput(e.target.value)}
-                    />
-                  </div>
+                    if (extraShardsNeeded === 0) {
+                      return (
+                        <div className="mb-6 p-6 rounded-2xl bg-[#F0F5F2] border border-[#B8D4BF] text-center">
+                          <CheckCircle className="w-8 h-8 text-[#4A7A5A] mx-auto mb-2" />
+                          <h4 className="text-[#2D2926] font-medium mb-1">
+                            Ready to Decrypt
+                          </h4>
+                          <p className="text-xs text-[#4A7A5A]">
+                            Your primary shard and the system shard are
+                            sufficient to meet the vault's strict threshold (
+                            {threshold}/{threshold}). No additional shards are
+                            needed!
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <div className="mb-4 p-4 rounded-xl bg-[#F0F5F2] border border-[#B8D4BF]">
+                          <div className="flex justify-between items-center mb-2">
+                            <p className="text-xs text-[#2D2926]">
+                              <strong>Your Primary Shard:</strong>
+                            </p>
+                            <span className="text-[10px] font-bold bg-[#E2ECE5] text-[#4A7A5A] px-2 py-1 rounded">
+                              2 / {threshold} Shards Ready
+                            </span>
+                          </div>
+                          <code className="text-[10px] break-all text-[#4A7A5A] select-all block mb-2">
+                            {activeClaim.shard}
+                          </code>
+                          <p className="text-[10px] text-[#8C8579] italic">
+                            This vault requires a strict threshold of{" "}
+                            {threshold} shards. You currently have 2 (Yours +
+                            System).
+                          </p>
+                        </div>
+
+                        <div className="mb-6">
+                          <label className="block text-xs font-medium mb-1.5 text-[#4A453F]">
+                            Enter {extraShardsNeeded} Additional Cryptographic
+                            Shard{extraShardsNeeded > 1 ? "s" : ""}
+                          </label>
+                          <textarea
+                            placeholder="Paste shards from other heirs here, separated by commas..."
+                            className={inputClass}
+                            style={{
+                              backgroundColor: "#F5F1EC",
+                              border: "1px solid #E8E3DC",
+                              color: "#2D2926",
+                              minHeight: "100px",
+                              fontFamily: "monospace",
+                              fontSize: "11px",
+                            }}
+                            value={shardsInput}
+                            onChange={(e) => setShardsInput(e.target.value)}
+                          />
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   {status.msg && (
                     <div

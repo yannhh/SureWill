@@ -20,7 +20,7 @@ function AppContent() {
           <PublicHeirPortal onBack={() => setView("landing")} />
         )
       ) : (
-        <Dashboard userId={userId!} logout={logout} />
+        <Dashboard logout={logout} />
       )}
     </div>
   );

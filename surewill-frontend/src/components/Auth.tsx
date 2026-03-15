@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield,
@@ -10,6 +10,8 @@ import {
   ArrowLeft,
   CheckCircle,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import _sodium from "libsodium-wrappers-sumo";
 
@@ -22,19 +24,20 @@ export const Auth = ({
   setUserId: (id: string) => void;
   onSwitchToHeir: () => void;
 }) => {
-  const [mode, setMode] = useState<"login" | "register" | "forgot" | "otp">(
-    "login",
-  );
+  const [mode, setMode] = useState<
+    "login" | "register" | "forgot" | "otp" | "reset"
+  >("login");
 
-  // Form States
+  // states for form inputs
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [otp, setOtp] = useState("");
   const [tempUserId, setTempUserId] = useState("");
   const [estatePreference, setEstatePreference] = useState("standard");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // UI States
+  // states for UI
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -48,26 +51,59 @@ export const Auth = ({
   const inputClass =
     "w-full pl-11 pr-4 py-3.5 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-offset-0 focus:ring-[#7B9E87]/30";
 
+  const modeSwitcher = (
+    newMode: "login" | "register" | "forgot" | "otp" | "reset",
+  ) => {
+    // always clears the error and success messages
+    setError("");
+    setSuccess("");
+
+    // This keeps the login credentials after the user registers
+    const isLoginRegisterSwap =
+      (mode === "login" && newMode === "register") ||
+      (mode === "register" && newMode === "login");
+
+    if (!isLoginRegisterSwap) {
+      setPassword(""); // removes the password on the screen
+    }
+
+    setOtp(""); // Always scrubs the OTP box
+    setMode(newMode);
+  };
+  // Checks the URL parameters on mount to initiate the password reset flow if a token is present.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
+    if (token && window.location.pathname === "/reset-password") {
+      setMode("reset");
+    }
+  }, []);
+
   const handleAction = async () => {
     setError("");
     setSuccess("");
 
     /**
-     * Cleaning inputs here.
-     * Ensures that no accidental spaces dont break the cryptographic hashing later on.
+     * Input Sanitization
+     * Inputs are trimmed to ensure that accidental trailing spaces do not compromise
+     * the cryptographic hashing processes later in the execution.
      */
     const cleanEmail = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
 
     /**
      * Input Validation
-     * Added checks to prevent the cryptography library from crashing.
-     * If it receives empty strings, it crashes on me.
+     * Strict validation ensures the cryptography library receives valid string formats,
+     * preventing fatal application crashes during the hashing phase.
      */
     if (mode === "register" && !username.trim()) {
       return setError("Please enter a full name or username.");
     }
-    if ((mode === "login" || mode === "register") && !password) {
+    if (
+      (mode === "login" || mode === "register" || mode === "reset") &&
+      !password
+    ) {
       return setError("Please enter a password.");
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -86,20 +122,21 @@ export const Auth = ({
 
       /**
        * Deterministic Key Derivation
-       * This is the core "Zero-Knowledge" part of my project.
-       * Instead of the server managing the keys, the browser derives them locally.
+       * This forms the core "Zero-Knowledge" architecture of the application.
+       * The client browser derives cryptographic keys locally rather than relying
+       * on a centralized server for key generation.
        */
       if (mode === "login" || mode === "register") {
         await _sodium.ready;
         const sodium = _sodium;
 
-        //I use the user's email as salt to ensure their keys are unique even if two users have the same password.
+        // The user's email functions as a cryptographic salt, ensuring unique keys even in the event of identical passwords.
         const saltStr = cleanEmail.padEnd(16, " ").slice(0, 16);
         const salt = sodium.from_string(saltStr);
 
         /**
-         * I chose Argon2id (crypto password hash) becaus it is resistant to GPU cracking.
-         * This creates a master seed from the password.
+         * Argon2id is implemented for password hashing due to its high resistance to GPU cracking and side-channel attacks.
+         * This step generates a secure master seed from the provided password.
          */
         const seed = sodium.crypto_pwhash(
           sodium.crypto_sign_SEEDBYTES,
@@ -111,16 +148,15 @@ export const Auth = ({
         );
 
         /**
-         * This seed generates an Ed25519 keypair.
-         * This is the "identity key" used to sign all the uploads.
-         * This proves the owner's identity.
+         * The master seed generates an Ed25519 keypair.
+         * This "identity key" is utilized to digitally sign vault uploads, mathematically proving the owner's identity.
          */
         const identityKeypair = sodium.crypto_sign_seed_keypair(seed);
         publicKeyHex = sodium.to_hex(identityKeypair.publicKey);
         privateKeyHex = sodium.to_hex(identityKeypair.privateKey);
       }
 
-      // I dynamically set the endpoint and payload based on the mode/state of the UI
+      // Endpoint routing and payload construction are dynamically assigned based on the current UI state.
       let endpoint = "";
       let bodyPayload: any = {};
 
@@ -133,7 +169,7 @@ export const Auth = ({
           username,
           email: cleanEmail,
           password,
-          publicKey: publicKeyHex, // Only this public key is sent to the server
+          publicKey: publicKeyHex,
           estatePreference: estatePreference,
         };
       } else if (mode === "otp") {
@@ -142,6 +178,10 @@ export const Auth = ({
       } else if (mode === "forgot") {
         endpoint = "/api/forgot-password";
         bodyPayload = { email: cleanEmail };
+      } else if (mode === "reset") {
+        endpoint = "/api/reset-password";
+        const params = new URLSearchParams(window.location.search);
+        bodyPayload = { token: params.get("token"), newPassword: password };
       }
 
       const res = await fetch(endpoint, {
@@ -151,35 +191,39 @@ export const Auth = ({
       });
 
       /**
-       * Crash Prevention
-       * If the backend is off (if I accidentally forget to run the backend scripts), the proxy will return an HTML error page.
-       * This basically checks the content-type to preven the res.json from crashing.
+       * Server Availability Check
+       * If the backend server is offline, the proxy may return an HTML error page.
+       * Validating the content-type prevents unexpected JSON parsing crashes in the browser environment.
        */
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error(
-          "Backend server is offline! Please ensure your Node.js backend is running.",
+          "Backend server is offline! Please ensure the Node.js backend is running.",
         );
       }
 
       const data = await res.json();
 
-      // Response Handling
+      // Network Response Handling
       if (mode === "login") {
         if (data.userId) {
-          // Key security: I store the private key in session storage.
-          // It will stay in the memory for the session but is never saved to a local storage.
+          /**
+           * Key Security Protocol
+           * The private key is temporarily stored in session storage. It remains in volatile memory
+           * for the duration of the active session and is strictly prevented from persisting in local storage.
+           */
           sessionStorage.setItem("surewill_identity_key", privateKeyHex);
           setTempUserId(data.userId);
           setMode("otp");
+          modeSwitcher("otp");
           setSuccess("Verification code sent to your email.");
         } else {
           setError(data.error || "Invalid login credentials.");
         }
       } else if (mode === "register") {
         if (res.ok) {
-          setSuccess("Registered! You may log in.");
-          setTimeout(() => setMode("login"), 1500);
+          setSuccess("Registration complete. Initialization available.");
+          setTimeout(() => modeSwitcher("login"), 1500);
         } else {
           setError(data.error || "Registration failed.");
         }
@@ -188,18 +232,32 @@ export const Auth = ({
           sessionStorage.setItem("surewill_jwt", data.token);
           setUserId(tempUserId);
         } else {
-          setError("Invalid or expired code.");
+          setError("Invalid or expired authentication code.");
         }
       } else if (mode === "forgot") {
         if (res.ok) {
-          setSuccess("Password reset link has been sent to your email.");
+          setSuccess("Password reset token has been sent to your email.");
         } else {
-          setError("Failed to send password reset link.");
+          setError(
+            "Failed to issue reset token. Ensure the email is registered in the database.",
+          );
+        }
+      } else if (mode === "reset") {
+        if (res.ok) {
+          setSuccess("Cryptographic credentials updated successfully!");
+          // Sanitizes the URL history to prevent token leakage
+          window.history.pushState({}, document.title, "/");
+          setTimeout(() => {
+            modeSwitcher("login");
+            setPassword("");
+          }, 2000);
+        } else {
+          setError(data.error || "Failed to update security credentials.");
         }
       }
     } catch (err: any) {
-      console.error("Auth Error:", err);
-      setError(err.message || "An unexpected error occurred.");
+      console.error("Authentication Error:", err);
+      setError(err.message || "An unexpected system error occurred.");
     }
     setLoading(false);
   };
@@ -209,7 +267,7 @@ export const Auth = ({
       className="min-h-screen flex flex-col"
       style={{ backgroundColor: "#FAF7F2", fontFamily: "'Inter', sans-serif" }}
     >
-      {/* Navigation Bar */}
+      {/* Navigation Header */}
       <header className="w-full flex justify-between items-center p-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-2 text-[#4A7A5A]">
           <Shield className="w-6 h-6" />
@@ -226,14 +284,14 @@ export const Auth = ({
           </button>
           {mode === "login" ? (
             <button
-              onClick={() => setMode("register")}
+              onClick={() => modeSwitcher("register")}
               className="bg-[#4A7A5A] text-white px-5 py-2.5 rounded-full text-sm font-medium hover:bg-[#7B9E87] transition-colors flex items-center gap-2 shadow-sm"
             >
               Get started <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
-              onClick={() => setMode("login")}
+              onClick={() => modeSwitcher("login")}
               className="bg-white text-[#2D2926] border border-[#E8E3DC] px-5 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
             >
               Sign in
@@ -242,21 +300,23 @@ export const Auth = ({
         </div>
       </header>
 
-      {/* Main Split Content */}
+      {/* Main Split Layout */}
       <main className="flex-1 flex flex-col lg:flex-row items-center justify-between max-w-6xl mx-auto w-full px-6 gap-12 lg:gap-24 mt-10 lg:mt-16 pb-12">
-        {/* Left Side: Marketing Copy */}
+        {/* Left Section: Value Proposition */}
         <div className="flex-1 max-w-lg">
           <p className="text-[#7B9E87] text-xs font-bold tracking-widest uppercase mb-4">
-            Estate Planning, Reimagined
+            Zero-Knowledge Estate Vault
           </p>
           <h1 className="font-serif text-5xl lg:text-7xl leading-tight mb-6 text-[#2D2926]">
-            Leave behind <br />
-            <span className="text-[#7B9E87] italic">clarity</span> and love.
+            Your legacy, <br />
+            <span className="text-[#7B9E87] italic">secured</span> by
+            mathematics.
           </h1>
           <p className="text-[#8C8579] text-lg mb-8 leading-relaxed">
-            SureWill guides you through creating your will, protecting your
-            assets, and leaving personal messages for the people who matter
-            most.
+            More than just your last will - an impenetrable vault for your
+            digital assets. Protect your digital wealth, document your estate,
+            keep family memories and leave private messages that remain
+            mathematically locked until the right moment.
           </p>
 
           <div className="flex flex-wrap items-center gap-6 text-sm text-[#8C8579]">
@@ -273,7 +333,7 @@ export const Auth = ({
           </div>
         </div>
 
-        {/* Right Side: Auth Card */}
+        {/* Right Section: Authentication Interface */}
         <div className="w-full max-w-md relative">
           <div
             className="rounded-3xl p-8 relative overflow-hidden"
@@ -299,9 +359,10 @@ export const Auth = ({
                   {mode === "register" && "Create Your Vault"}
                   {mode === "otp" && "Verify Identity"}
                   {mode === "forgot" && "Recover Access"}
+                  {mode === "reset" && "Set New Password"}
                 </h2>
 
-                {/* Status Messages */}
+                {/* System Feedback UI */}
                 {error && (
                   <div className="mb-4 p-3 rounded-xl text-xs font-medium bg-red-50 text-red-600 border border-red-100 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
@@ -321,9 +382,22 @@ export const Auth = ({
                 )}
 
                 <div className="space-y-4">
+                  {/* Security Badge for Token Authentication */}
+                  {mode === "reset" && (
+                    <div className="mb-2 p-5 rounded-2xl bg-[#F0F5F2] border border-[#B8D4BF] text-center">
+                      <Shield className="w-8 h-8 text-[#4A7A5A] mx-auto mb-2 opacity-80" />
+                      <h4 className="text-[#2D2926] font-medium mb-1">
+                        Secure Reset
+                      </h4>
+                      <p className="text-xs text-[#4A7A5A] leading-relaxed">
+                        Your identity has been verified securely using your
+                        email token. Enter your new password.
+                      </p>
+                    </div>
+                  )}
                   {mode === "register" && (
                     <>
-                      {/*Sharia Toggle*/}
+                      {/* Islamic Inheritance Configuration Toggle */}
                       <div className="p-4 rounded-xl border border-[#E8E3DC] bg-white">
                         <label className="flex items-start gap-3 cursor-pointer">
                           <div className="relative flex items-center mt-1">
@@ -349,10 +423,10 @@ export const Auth = ({
                               Enable Islamic Inheritance (Faraid)
                             </p>
                             <p className="text-xs text-[#8C8579] mt-1 leading-relaxed">
-                              Activating this will tailor your vault to help you
-                              allocate financial assets according to Sharia
-                              proportions based on your registered family
-                              members.
+                              Activating this framework tailors the vault
+                              configuration to calculate financial allocations
+                              according to Sharia proportions based on
+                              registered beneficiaries.
                             </p>
                           </div>
                         </label>
@@ -375,6 +449,7 @@ export const Auth = ({
                     </>
                   )}
 
+                  {/* Email Input is active during login, registration, and initial password recovery */}
                   {(mode === "login" ||
                     mode === "register" ||
                     mode === "forgot") && (
@@ -394,20 +469,40 @@ export const Auth = ({
                     </div>
                   )}
 
-                  {(mode === "login" || mode === "register") && (
+                  {/* Password Input is active during login, registration, and the final reset stage */}
+                  {(mode === "login" ||
+                    mode === "register" ||
+                    mode === "reset") && (
                     <div className="relative">
                       <Lock
                         className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2"
                         style={{ color: "#A8A09A" }}
                       />
                       <input
-                        type="password"
-                        placeholder="Password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder={
+                          mode === "reset" ? "Enter New Password" : "Password"
+                        }
                         className={inputClass}
-                        style={inputStyle}
+                        style={{
+                          ...inputStyle,
+                          paddingRight: "3rem",
+                        }}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                       />
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#A8A09A] hover:text-[#4A7A5A] transition-colors focus:outline-none"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-5 h-5" />
+                        ) : (
+                          <Eye className="w-5 h-5" />
+                        )}
+                      </button>
                     </div>
                   )}
 
@@ -434,7 +529,7 @@ export const Auth = ({
                   )}
                 </div>
 
-                {/*Action Button*/}
+                {/* Form Submission Button */}
                 <button
                   onClick={handleAction}
                   disabled={loading}
@@ -450,14 +545,15 @@ export const Auth = ({
                     <>
                       {mode === "login" && "Unlock Vault"}
                       {mode === "register" && "Initialize Vault"}
-                      {mode === "otp" && "Verify Code"}
+                      {mode === "otp" && "Verify Identity"}
                       {mode === "forgot" && "Send Reset Link"}
+                      {mode === "reset" && "Update Password"}
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
 
-                {/*Nav Links*/}
+                {/* Auxiliary Navigation Actions */}
                 <div
                   className="mt-6 text-center text-xs"
                   style={{ color: "#8C8579" }}
@@ -465,7 +561,7 @@ export const Auth = ({
                   {mode === "login" && (
                     <div className="flex flex-col gap-3">
                       <button
-                        onClick={() => setMode("forgot")}
+                        onClick={() => modeSwitcher("forgot")}
                         className="hover:text-[#4A7A5A] transition-colors"
                       >
                         Forgot your password?
@@ -474,10 +570,10 @@ export const Auth = ({
                   )}
                   {(mode === "forgot" || mode === "otp") && (
                     <button
-                      onClick={() => setMode("login")}
+                      onClick={() => modeSwitcher("login")}
                       className="flex items-center justify-center gap-1.5 mx-auto hover:text-[#4A7A5A] transition-colors"
                     >
-                      <ArrowLeft className="w-3.5 h-3.5" /> Back to login
+                      <ArrowLeft className="w-3.5 h-3.5" /> Return to Login
                     </button>
                   )}
                 </div>

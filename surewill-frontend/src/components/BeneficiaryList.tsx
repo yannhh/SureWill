@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Users, Check, X, Shield, Key } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Users,
+  Check,
+  X,
+  Shield,
+  Key,
+  AlertCircle,
+} from "lucide-react";
 import { ShariaWillGenerator } from "./ShariaWillGenerator";
 
 const MotionDiv = motion.div;
@@ -109,6 +118,24 @@ const BeneficiaryList: React.FC<{
   };
 
   const handleSave = async () => {
+    //Form Validation so the user can't just put random stuff in
+    if (!form.full_name.trim() || !form.email.trim() || form.phone.trim()) {
+      setStatus("Please fill in all fields.");
+      return; //Stops function from working further
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email)) {
+      setStatus("Please enter a valid email address.");
+      return;
+    }
+
+    const phoneRegex = /^[\d\+\-\s\(\)]{7,20}$/;
+    if (!phoneRegex.test(form.phone)) {
+      setStatus("Please enter a valid phone number.");
+      return;
+    }
+
     setSaving(true);
     setStatus("");
 
@@ -239,7 +266,7 @@ const BeneficiaryList: React.FC<{
           className="text-xs uppercase tracking-widest mb-2"
           style={{ color: "#8C8579" }}
         >
-          Those you cherish
+          Your Loved Ones
         </p>
         <h1
           className="font-serif text-4xl mb-2"
@@ -349,7 +376,7 @@ const BeneficiaryList: React.FC<{
 
       {beneficiaries.length === 0 && !showForm && (
         <div
-          className="text-center py-16 border-2 border-dashed rounded-3xl"
+          className="mb-10 text-center py-16 border-2 border-dashed rounded-3xl"
           style={{ borderColor: "#E8E3DC" }}
         >
           <Users
@@ -439,13 +466,12 @@ const BeneficiaryList: React.FC<{
                     setForm({ ...form, relationship: e.target.value })
                   }
                 >
-                  {/* Dynamic Rendering Based on Legal Preference */}
+                  {/* Changes the UI based on the type of user account */}
                   {(estatePreferences === "sharia"
                     ? SHARIA_RELATIONSHIPS
                     : STANDARD_RELATIONSHIPS
                   ).map((r) => (
                     <option key={r} value={r}>
-                      {/* Capitalizes the first letter so 'son' becomes 'Son' */}
                       {r.charAt(0).toUpperCase() + r.slice(1)}
                     </option>
                   ))}
@@ -475,7 +501,7 @@ const BeneficiaryList: React.FC<{
                 />
               </div>
               <div>
-                {/*Mobile phone input field */}
+                {/*Phone input field*/}
                 <label
                   className="block text-xs font-medium mb-1.5"
                   style={{ color: "#4A453F" }}
@@ -496,6 +522,22 @@ const BeneficiaryList: React.FC<{
                 />
               </div>
             </div>
+
+            {/* Status error for UI */}
+            {status && (
+              <div
+                className={`mb-6 p-3 rounded-xl text-xs font-medium flex items-start gap-2 border ${
+                  status.includes("Error") || status.includes("fail")
+                    ? "bg-[#FEF2F2] text-[#991B1B] border-[#FCA5A5]" // Red Error Styling
+                    : "bg-[#F0F5F2] text-[#4A7A5A] border-[#B8D4BF]" // Green Success Styling
+                }`}
+              >
+                {status.includes("Error") && (
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                )}
+                <span>{status}</span>
+              </div>
+            )}
 
             <div className="flex gap-3 mt-2">
               <button

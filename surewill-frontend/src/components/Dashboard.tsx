@@ -26,6 +26,7 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
   const [assetCount, setAssetCount] = useState(0);
   const [assetRefresh, setAssetRefresh] = useState(0);
   const [estatePreference, setEstatePreference] = useState("standard");
+  const [username, setUsername] = useState("");
 
   const fetchStats = async () => {
     // IDOR Patch
@@ -51,6 +52,9 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
       if (userRes.ok) {
         const userData = await userRes.json();
         setEstatePreference(userData.estatePreference || "standard");
+        setUsername(userData.username);
+      } else {
+        console.error("Backend fetch failed.", userRes.status);
       }
     } catch (err) {
       console.error("Failed to sync stats", err);
@@ -234,11 +238,11 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
                 Your estate portal
               </p>
               <h1 className="font-serif text-4xl md:text-5xl mb-3 text-[#2D2926] font-light">
-                {greeting}.
+                {greeting}, {username}.
               </h1>
               <p className="text-[#8C8579] text-lg">
-                Your wishes, preserved with care. Let's make sure everything is
-                in order.
+                Your wishes, preserved with care. Start by completing the vault
+                checklist.
               </p>
             </div>
 

@@ -130,7 +130,9 @@ app.use(
   }),
 );
 // This middleware lets my server understand and parse incoming JSON data from requests.
-app.use(express.json());
+// This also contains a limit to how big the payload's maximum size is
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 const authenticationRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, //15 minute window
@@ -510,6 +512,7 @@ app.post("/api/otp/verify-otp", async (req, res) => {
     // Finally, granting them access.
     res.json({
       message: "MFA Success. Access Granted.",
+      token: token,
       user: { id: user._id, username: user.username },
     });
   } catch (err) {
@@ -648,6 +651,8 @@ app.post("/api/vault/upload", verifyToken, async (req: any, res: any) => {
       file_name: fileName,
       file_type: fileType,
       file_size: fileSize,
+      category: rest.category,
+      description: rest.description,
       unlock_condition: rest.unlockCondition,
     });
 
@@ -771,6 +776,20 @@ app.post("/api/beneficiaries", verifyToken, async (req: any, res: any) => {
   const { fullName, email, relationship, phone } = req.body;
 
   const userId = req.userId;
+
+  if (!fullName || !email || !relationship || !phone) {
+    return res.status(400).json({ error: "Please fill up all fields." });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: "Enter a valid email address." });
+  }
+
+  const phoneRegex = /^[\d\+\-\s\(\)]{7,20}$/;
+  if (!phoneRegex.test(phone)) {
+    return res.status(400).json({ error: "Invalid Phone Number Format." });
+  }
 
   try {
     // Creating a new beneficiary document and linking it to the user.
