@@ -56,6 +56,7 @@ async function sendAckEmail(
   userEmail: string,
   userName: string,
   userId: string,
+  gracePeriodDays: number,
 ) {
   if (!transporter) await mailerSetup();
 
@@ -74,11 +75,11 @@ async function sendAckEmail(
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="${ackURL}" 
                        style="background-color: #007bff; color: white; padding: 15px 25px; border-radius: 5px; font-weight: bold;">
-                       Im here!!!
+                       I'm here!!!
                     </a>
                 </div>
 
-                <p style="color: #666; font-size: 12px;">If you do not click this button within 48 hours, your vault will be automatically triggered.</p>
+                <p style="color: #666; font-size: 12px;">If you do not click this button within ${gracePeriodDays} days, your vault will be automatically triggered and released to your heirs.</p>
             </div>
         `,
   });
@@ -99,47 +100,68 @@ async function checkInactivity() {
   try {
     const now = new Date();
 
-    //1 min threshold for testing
-    const thresholdDate = new Date(now.getTime() - 1 * 60000);
+    const activeUsers = await User.find({ account_status: "active" });
 
-    //48 hr grace period after threshold
-    const gracePeriod = new Date(now.getTime() - 48 * 60 * 60000);
+    for (const user of activeUsers) {
+      const thresholdDays = (user as any).dms_threshold || 60;
+      const gracePeriodDays = (user as any).dms_grace_period || 14;
 
-    const overdue = await User.find({
-      account_status: "active",
-      last_active: { $lt: thresholdDate },
-    });
+      // converting the days into ms, so it can be calculated
+      const thresholdMS = thresholdDays * 24 * 60 * 60 * 1000;
 
-    for (const user of overdue) {
-      user.account_status = "pending acknowledgement";
-      await user.save();
+      // Calculates how long it has been since the user was last logged in or uploading something
+      const lastActive = now.getTime() - new Date(user.last_active).getTime();
 
-      await sendAckEmail(user.email, user.username, `${user._id}`);
-      console.log(`[ALARM] User ${user.username} moved to pending.`);
+      if (lastActive > thresholdMS) {
+        user.account_status = "pending acknowledgement";
+        await user.save();
+
+        await sendAckEmail(
+          user.email,
+          user.username,
+          `${user._id}`,
+          gracePeriodDays,
+        );
+        console.log(
+          `System Alert! The user ${user.username} is pending acknowledgement. Overdue by: ${thresholdDays}`,
+        );
+      }
     }
 
-    const triggered = await User.find({
+    const pendingUsers = await User.find({
       account_status: "pending acknowledgement",
-      last_active: { $lt: gracePeriod },
     });
 
-    for (const user of triggered) {
-      user.account_status = "inactivity triggered";
-      await user.save();
+    for (const user of pendingUsers) {
+      const thresholdDays = (user as any).dms_threshold || 60;
+      const gracePeriodDays = (user as any).dms_grace_period || 14;
 
-      await Beneficiary.updateMany(
-        { userId: user._id },
-        { access_granted: true },
-      );
+      // deadline is the threshold and the grace period combined in milliseconds
+      const deadlineMs =
+        (thresholdDays + gracePeriodDays) * 24 * 60 * 60 * 1000;
+      const lastActive = now.getTime() - new Date(user.last_active).getTime();
 
-      const heirs = await Beneficiary.find({ userId: user._id });
+      // If the user hasn't clicked the link after grace period, the vault will be unlocked
+      if (lastActive > deadlineMs) {
+        user.account_status = "inactivity triggered";
+        await user.save();
 
-      for (const heir of heirs) {
-        if (heir.email) {
-          await sendNotification(heir.email, user.username);
+        await Beneficiary.updateMany(
+          { userId: user._id },
+          { access_granted: true },
+        );
+
+        const heirs = await Beneficiary.find({ userId: user._id });
+
+        for (const heir of heirs) {
+          if (heir.email) {
+            await sendNotification(heir.email, user.username);
+          }
         }
+        console.log(
+          `Critical! Dead Man's Switch has been triggered for ${user.username}. Asset will now be released to heirs.`,
+        );
       }
-      console.log(`[CRITICAL] Switch triggered for ${user.username}.`);
     }
   } catch (err) {
     console.error("[Monitor Error]", err);

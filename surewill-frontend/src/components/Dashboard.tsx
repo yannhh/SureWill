@@ -27,6 +27,13 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
   const [assetRefresh, setAssetRefresh] = useState(0);
   const [estatePreference, setEstatePreference] = useState("standard");
   const [username, setUsername] = useState("");
+  const [dmsThreshold, setDmsThreshold] = useState(60);
+  const [gracePeriod, setGracePeriod] = useState(14);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState({ type: "", msg: "" });
+  // This is for showing the user their current settings
+  const [savedThreshold, setSavedThreshold] = useState(60);
+  const [savedGracePeriod, setSavedGracePeriod] = useState(14);
 
   const fetchStats = async () => {
     // IDOR Patch
@@ -53,6 +60,15 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
         const userData = await userRes.json();
         setEstatePreference(userData.estatePreference || "standard");
         setUsername(userData.username);
+
+        if (userData.dmsThreshold) {
+          setDmsThreshold(userData.dmsThreshold);
+          setSavedThreshold(userData.dmsThreshold);
+        }
+        if (userData.gracePeriod) {
+          setGracePeriod(userData.gracePeriod);
+          setSavedGracePeriod(userData.gracePeriod);
+        }
       } else {
         console.error("Backend fetch failed.", userRes.status);
       }
@@ -64,6 +80,45 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
   useEffect(() => {
     fetchStats();
   }, [assetRefresh]);
+
+  const handleSaveDMS = async () => {
+    setIsSaving(true);
+    setSaveStatus({ type: "info", msg: "Updating security protocol..." });
+
+    try {
+      const token = sessionStorage.getItem("surewill_jwt");
+      const res = await fetch("/api/user/dms-settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          dms_threshold: dmsThreshold,
+          dms_grace_period: gracePeriod,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to update settings.");
+
+      setSaveStatus({
+        type: "success",
+        msg: "Check-in and Confirmation window updated successfully.",
+      });
+      setSavedThreshold(dmsThreshold);
+      setSavedGracePeriod(gracePeriod);
+      setTimeout(() => setSaveStatus({ type: "", msg: "" }), 3000);
+    } catch (err: any) {
+      setSaveStatus({
+        type: "error",
+        msg: err.message || "An error occurred.",
+      });
+    }
+
+    setIsSaving(false);
+  };
 
   const checklist = [
     { label: "Account secured with MFA", done: true, tab: "overview" },
@@ -224,9 +279,7 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
         </AnimatePresence>
       </header>
 
-      {/* Main Content Area */}
       <main className="pt-24 pb-12 px-6 max-w-5xl mx-auto">
-        {/* VIEW: OVERVIEW (The Dashboard) */}
         {activeTab === "overview" && (
           <MotionDiv
             initial={{ opacity: 0, y: 20 }}
@@ -246,7 +299,7 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
               </p>
             </div>
 
-            {/* Progress Card */}
+            {/* User Progress card that updates*/}
             <div
               className="rounded-3xl p-8 mb-10 bg-white border border-[#E8E3DC]"
               style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.04)" }}
@@ -302,7 +355,7 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
               </div>
             </div>
 
-            {/* Navigation Cards */}
+            {/* Nav */}
             <div className="grid md:grid-cols-2 gap-5 mb-10">
               {cards.map((card, i) => (
                 <button
@@ -326,6 +379,106 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
                   </div>
                 </button>
               ))}
+            </div>
+
+            {/*Dead Man's Switch customizer so user can set it manually*/}
+            <div
+              className="rounded-3xl p-8 bg-white border border-[#E8E3DC] mb-10"
+              style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.04)" }}
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-[#F0F5F2] flex items-center justify-center text-[#4A7A5A]">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-[#2D2926]">
+                    Heartbeat Monitor
+                  </h3>
+                  <p className="text-xs text-[#8C8579]">
+                    Customize your Check-in and Vault Release timers. Whether
+                    you are an avid traveller or prefer to stay at the comfort
+                    of your own home. You are accommodated.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium mb-2 text-[#4A453F]">
+                    Check-in Scheduling
+                    <span className="px-2 py-0.5 rounded-md bg-[#F0F5F2] text-[#4A7A5A] text-[10px] font-bold tracking-wide">
+                      ACTIVE: {savedThreshold} DAYS
+                    </span>
+                  </label>
+                  <p className="text-[10px] text-[#8C8579] mb-3 leading-relaxed">
+                    This is how long the system will be waiting for you without
+                    seeing you log in before allowing vault access to your loved
+                    ones.
+                  </p>
+                  <select
+                    value={dmsThreshold}
+                    onChange={(e) => setDmsThreshold(Number(e.target.value))}
+                    className="w-full px-4 py-3.5 rounded-xl text-sm outline-none transition-all border border-[#E8E3DC] bg-[#F5F1EC] text-[#2D2926] focus:ring-2 focus:ring-[#7B9E87]/30"
+                  >
+                    <option value={7}>7 Days (Weekly Check-in)</option>
+                    <option value={14}>14 Days (Bi-weekly Check-in)</option>
+                    <option value={30}>30 Days (Standard Monitoring)</option>
+                    <option value={60}>60 Days (Relaxed - Recommended)</option>
+                    <option value={90}>
+                      90 Days (Extended or Vacation Mode)
+                    </option>
+                    <option value={180}>180 Days (Half Year)</option>
+                    <option value={365}>365 Days (Annual Check-in)</option>
+                  </select>
+                </div>
+
+                {/* Grace Period Selection */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium mb-2 text-[#4A453F]">
+                    Confirmation Window
+                    <span className="px-2 py-0.5 rounded-md bg-[#F0F5F2] text-[#4A7A5A] text-[10px] font-bold tracking-wide">
+                      ACTIVE: {savedGracePeriod} DAYS
+                    </span>
+                  </label>
+                  <p className="text-[10px] text-[#8C8579] mb-3 leading-relaxed">
+                    If we have not heard from you in a long time, this is how
+                    long we will wait before initiating the asset release to
+                    your loved ones.
+                  </p>
+                  <select
+                    value={gracePeriod}
+                    onChange={(e) => setGracePeriod(Number(e.target.value))}
+                    className="w-full px-4 py-3.5 rounded-xl text-sm outline-none transition-all border border-[#E8E3DC] bg-[#F5F1EC] text-[#2D2926] focus:ring-2 focus:ring-[#7B9E87]/30"
+                  >
+                    <option value={3}>3 Days (Strict Minimum)</option>
+                    <option value={7}>7 Days (Standard 1 Week)</option>
+                    <option value={14}>
+                      14 Days (Extended Time - Recommended)
+                    </option>
+                    <option value={30}>30 Days (Maximum Flexibility)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Status Feedback */}
+              {saveStatus.msg && (
+                <div
+                  className={`mb-4 p-3 rounded-xl text-xs font-medium flex items-center gap-2 border ${saveStatus.type === "error" ? "bg-red-50 text-red-600 border-red-100" : saveStatus.type === "success" ? "bg-[#F0F5F2] text-[#4A7A5A] border-[#B8D4BF]" : "bg-blue-50 text-blue-700 border-blue-100"}`}
+                >
+                  <CheckCircle className="w-4 h-4" /> {saveStatus.msg}
+                </div>
+              )}
+
+              <button
+                onClick={handleSaveDMS}
+                disabled={isSaving}
+                className="px-6 py-3 rounded-xl text-white text-sm font-medium transition-all hover:opacity-90 disabled:opacity-70"
+                style={{
+                  background: "linear-gradient(135deg, #7B9E87, #4A7A5A)",
+                }}
+              >
+                {isSaving ? "Checking Settings..." : "Save"}
+              </button>
             </div>
 
             {/* Gentle reminder banner */}

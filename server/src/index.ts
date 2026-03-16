@@ -350,6 +350,44 @@ app.get("/api/user/profile", verifyToken, async (req: any, res: any) => {
   }
 });
 
+// This endpoint is going to update the Dead Man's Switch to allow the user to set a customizable threshold/grace period.
+app.put("/api/user/dms-settings", verifyToken, async (req: any, res: any) => {
+  const { dms_threshold, dms_grace_period } = req.body;
+
+  if (
+    typeof dms_threshold !== "number" ||
+    typeof dms_grace_period !== "number"
+  ) {
+    return res.status(400).json({ error: "Invalid input format." });
+  }
+
+  if (dms_threshold < 7 || dms_threshold > 365) {
+    return res.status(400).json({
+      error: "Inactivity threshold can only be between 7 days upto a year.",
+    });
+  }
+
+  // Grace period cap to around 3 to a month
+  if (dms_grace_period < 3 || dms_grace_period > 30) {
+    return res
+      .status(400)
+      .json({ error: "Grace period can only be between 3 days upto a month" });
+  }
+
+  // Updating the user's preferences
+  try {
+    await User.findByIdAndUpdate(req.userId, {
+      dms_threshold: dms_threshold,
+      dms_grace_period: dms_grace_period,
+    });
+
+    res.json({ message: "Threshold and Grace period Updated!" });
+  } catch (err) {
+    console.error("Dead Man's Switch error.");
+    res.status(500).json({ error: "Server error. Failed to save." });
+  }
+});
+
 // This is just a simple endpoint to check if my server is running and if the crypto library is loaded correctly.
 app.get("/health", async (req, res) => {
   await sodium.ready;

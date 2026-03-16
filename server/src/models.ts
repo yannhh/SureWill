@@ -21,6 +21,8 @@ const userSchema = new Schema({
     enum: ["standard", "sharia"],
     default: "standard",
   },
+  dms_threshold: { type: Number, default: 60 }, // They're both stored in days
+  dms_grace_period: { type: Number, default: 14 },
 });
 
 /**
