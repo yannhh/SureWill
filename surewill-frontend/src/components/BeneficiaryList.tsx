@@ -119,7 +119,7 @@ const BeneficiaryList: React.FC<{
 
   const handleSave = async () => {
     //Form Validation so the user can't just put random stuff in
-    if (!form.full_name.trim() || !form.email.trim() || form.phone.trim()) {
+    if (!form.full_name.trim() || !form.email.trim() || !form.phone.trim()) {
       setStatus("Please fill in all fields.");
       return; //Stops function from working further
     }
