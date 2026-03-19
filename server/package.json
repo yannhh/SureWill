@@ -27,7 +27,8 @@
     "nodemailer": "^7.0.12",
     "otplib": "^13.3.0",
     "pg": "^8.16.3",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/connect": "^3.4.38",

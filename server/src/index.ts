@@ -12,6 +12,17 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
+import { z } from "zod";
+
+/**
+ * Validation schema using zod
+ * This ensures that if the data that the user is inputting looks bad
+ * The server will reject it with a 400 bad request to prevent crashing
+ */
+const loginSchema = z.object({
+  email: z.string().email().max(100),
+  password: z.string().min(6).max(100),
+});
 
 /**
  *
@@ -410,6 +421,9 @@ app.post("/api/login", async (req, res) => {
   }
 
   try {
+    const dataValid = loginSchema.parse(req.body);
+    const { email, password } = dataValid;
+
     await sodium.ready;
     // Find the user in my database by their email.
     const user = await User.findOne({ email });
