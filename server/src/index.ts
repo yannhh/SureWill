@@ -450,7 +450,10 @@ app.post("/api/login", async (req, res) => {
     // Sending it the frontend to let the user know.
     res.json({ message: "OTP has been sent to your email.", userId: user._id });
   } catch (err) {
-    console.error("[LOGIN ERROR] An error occurred during login:", err);
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error("Error! An error occurred during login:", err);
     res
       .status(500)
       .json({ error: "Login failed. Could not send verification email." });
