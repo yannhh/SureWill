@@ -222,7 +222,9 @@ export const Auth = ({
         }
       } else if (mode === "register") {
         if (res.ok) {
-          setSuccess("Registration complete. Initialization available.");
+          setSuccess(
+            "Registration complete. You may now log in to your vault.",
+          );
           setTimeout(() => modeSwitcher("login"), 1500);
         } else {
           setError(data.error || "Registration failed.");

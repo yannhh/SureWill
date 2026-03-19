@@ -407,7 +407,7 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
                   <label className="flex items-center gap-2 text-sm font-medium mb-2 text-[#4A453F]">
                     Check-in Scheduling
                     <span className="px-2 py-0.5 rounded-md bg-[#F0F5F2] text-[#4A7A5A] text-[10px] font-bold tracking-wide">
-                      ACTIVE: {savedThreshold} DAYS
+                      Your Current Active: {savedThreshold} DAYS
                     </span>
                   </label>
                   <p className="text-[10px] text-[#8C8579] mb-3 leading-relaxed">
@@ -437,7 +437,7 @@ export const Dashboard = ({ logout }: { logout: () => void }) => {
                   <label className="flex items-center gap-2 text-sm font-medium mb-2 text-[#4A453F]">
                     Confirmation Window
                     <span className="px-2 py-0.5 rounded-md bg-[#F0F5F2] text-[#4A7A5A] text-[10px] font-bold tracking-wide">
-                      ACTIVE: {savedGracePeriod} DAYS
+                      Your Current Active: {savedGracePeriod} DAYS
                     </span>
                   </label>
                   <p className="text-[10px] text-[#8C8579] mb-3 leading-relaxed">
