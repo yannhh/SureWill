@@ -14,7 +14,7 @@ const dbConnection = async () => {
     await mongoose.connect(process.env.DATABASE_URL as string);
     console.log("MongoDB Atlas Successfully Connected!");
   } catch (err) {
-    console.warn("MongoDB Connection Failed. Initializing Local Backup.");
+    console.warn("MongoDB Atlas Connection Failed. Initializing Local Backup.");
 
     try {
       await mongoose.connect(process.env.LOCAL_DB_URL as string);
