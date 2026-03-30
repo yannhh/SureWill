@@ -750,7 +750,17 @@ app.delete("/api/vault/delete/:id", verifyToken, async (req: any, res: any) => {
     // If the ownership check passes then the it will be deleted.
     await Asset.findByIdAndDelete(id);
 
-    res.status(200).json({ message: "Asset deleted successfully." });
+    /**
+     * Cascade delete update
+     * In the previous version, when an asset is deleted the user still keeps their SSS shards
+     * This will drop shards with the asset.
+     */
+    await Beneficiary.updateMany(
+      { "assigned_assets.assetId": id },
+      { $pull: { assigned_assets: { assetId: id } } },
+    );
+
+    res.status(200).json({ message: "Asset and Shards deleted successfully." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error deleting the asset." });
