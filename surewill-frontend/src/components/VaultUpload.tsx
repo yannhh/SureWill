@@ -84,6 +84,9 @@ const VaultUpload: React.FC<{
     }
   };
 
+  const documentObjectWait = () =>
+    new Promise((resolve) => setTimeout(resolve, 50));
+
   const handleDelete = async (itemId: string) => {
     if (
       !window.confirm(
@@ -145,6 +148,7 @@ const VaultUpload: React.FC<{
 
     setUploading(true);
     setStatusMsg("Encrypting and Splitting shards...");
+    await documentObjectWait();
 
     // The Cryptography
     try {
@@ -198,6 +202,7 @@ const VaultUpload: React.FC<{
        * This acts as the unique fingerprint to detect tampering later.
        */
       setStatusMsg("Generating Anti-Forgery Fingerprint..");
+      documentObjectWait();
       const hashBuffer = await crypto.subtle.digest("SHA-256", fileData);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       const fileHash = hashArray
