@@ -70,6 +70,7 @@ const BeneficiaryList: React.FC<{
   const [beneficiaries, setBeneficiaries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [estatePreferences, setEstatePreferences] = useState("standard");
+  const [testator, setTestator] = useState("");
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY("standard"));
@@ -105,6 +106,7 @@ const BeneficiaryList: React.FC<{
         console.log("User Data:", userData); // Having trouble with the sharia setting the form ui changes
         const pref = userData.estatePreference || "standard";
         setEstatePreferences(pref);
+        setTestator(userData.username);
         setForm(EMPTY(pref));
       } else {
         console.error("Backend fetch failed.", userRes.status);
@@ -700,7 +702,10 @@ const BeneficiaryList: React.FC<{
         </MotionDiv>
       )}
       {estatePreferences === "sharia" && beneficiaries.length > 0 && (
-        <ShariaWillGenerator beneficiaries={beneficiaries} />
+        <ShariaWillGenerator
+          beneficiaries={beneficiaries}
+          testator={testator}
+        />
       )}
     </div>
   );

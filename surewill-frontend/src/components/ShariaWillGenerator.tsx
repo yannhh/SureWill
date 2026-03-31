@@ -5,8 +5,10 @@ import { jsPDF } from "jspdf";
 
 export const ShariaWillGenerator = ({
   beneficiaries,
+  testator,
 }: {
   beneficiaries: any[];
+  testator: string;
 }) => {
   const [distribution, setDistribution] = useState<any[]>([]);
   const [status, setStatus] = useState("");
@@ -143,9 +145,13 @@ export const ShariaWillGenerator = ({
       { align: "center" },
     );
 
+    doc.setFont("helvetica", "bold");
+    doc.text(`Declared by Testator: ${testator}`, 105, 36, { align: "center" });
+    doc.setFont("helvetica", "normal");
+
     //The body text
     doc.setFontSize(10);
-    let yPos = 45;
+    let yPos = 50;
 
     doc.text(
       "In accordance with Islamic Inheritance Law, my assets shall be distributed",
