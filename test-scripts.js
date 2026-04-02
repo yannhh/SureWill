@@ -4,10 +4,10 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const API_URL = "https://localhost:5050/api";
 
 async function runTests() {
-  console.log("🛡️ Starting Deep Input Validation & Security Pentest...\n");
+  console.log("Automated JavaScript test\n");
 
   // Missing Shards Array (Denial of Service attempt)
-  console.log("▶ TEST 1: Uploading asset with missing 'shards' array...");
+  console.log("Test 1: Uploading asset with missing 'shards' array...");
   try {
     const res1 = await fetch(`${API_URL}/vault/upload`, {
       method: "POST",
@@ -21,16 +21,16 @@ async function runTests() {
 
     // Read the exact response from server
     const data1 = await res1.json();
-    console.log(`  ↳ Status: HTTP ${res1.status}`);
-    console.log(`  ↳ Server Reply:`, data1);
+    console.log(`Status: HTTP ${res1.status}`);
+    console.log(`Server Reply:`, data1);
   } catch (err) {
-    console.log(`  ↳ Network Error:`, err.message);
+    console.log(`Network Error:`, err.message);
   }
   console.log("--------------------------------------------------\n");
 
   // Wrong Data Type (Crashing the Crypto Engine)
   console.log(
-    "▶ TEST 2: Registering with an integer instead of a password string...",
+    "Test 2: Registering with an integer instead of a password string...",
   );
   try {
     const res2 = await fetch(`${API_URL}/register`, {
@@ -43,18 +43,16 @@ async function runTests() {
       }),
     });
     const data2 = await res2.json();
-    console.log(`  ↳ Status: HTTP ${res2.status}`);
-    console.log(`  ↳ Server Reply:`, data2);
+    console.log(`Status: HTTP ${res2.status}`);
+    console.log(`Server Reply:`, data2);
   } catch (err) {
-    console.log(`  ↳ Network Error:`, err.message);
+    console.log(`Network Error:`, err.message);
   }
   console.log("--------------------------------------------------\n");
 
   // Rate Limiting / Brute Force Attack
-  console.log(
-    "▶ TEST 3: Brute Force Attack on /login (Testing Rate Limiter)...",
-  );
-  console.log("  ↳ Firing 12 rapid login requests to overwhelm the server...");
+  console.log("Test 3: Brute Force Attack on /login (Testing Rate Limiter)...");
+  console.log("Sending 12 login requests to overwhelm server...");
 
   for (let i = 1; i <= 12; i++) {
     try {
@@ -70,20 +68,20 @@ async function runTests() {
       // 429 for Too Many Requests.
       if (res3.status === 429) {
         const data3 = await res3.json();
-        console.log(`  ↳ Request ${i}: BLOCKED! Status: HTTP 429`);
-        console.log(`  ↳ Server Reply:`, data3);
+        console.log(`Request ${i}: BLOCKED! Status: HTTP 429`);
+        console.log(`Server Reply:`, data3);
         break; // If the request has been blocked, it stops.
       } else {
-        console.log(`  ↳ Request ${i}: Status: HTTP ${res3.status} (Allowed)`);
+        console.log(`Request ${i}: Status: HTTP ${res3.status} (Allowed)`);
       }
     } catch (err) {
-      console.log(`  ↳ Network Error:`, err.message);
+      console.log(`Network Error:`, err.message);
       break;
     }
   }
 
   // Password Policy Evasion
-  console.log("▶ TEST 4: Attempting to bypass the Password Policy...");
+  console.log("Test 4: Attempting to bypass the Password Policy...");
   try {
     const res4 = await fetch(`${API_URL}/register`, {
       method: "POST",
@@ -95,17 +93,17 @@ async function runTests() {
       }),
     });
     const data4 = await res4.json();
-    console.log(`  ↳ Status: HTTP ${res4.status} (Should be 400)`);
-    console.log(`  ↳ Server Reply:`, data4);
+    console.log(`Status: HTTP ${res4.status} (Should be 400)`);
+    console.log(`Server Reply:`, data4);
   } catch (err) {
-    console.log(`  ↳ Network Error:`, err.message);
+    console.log(`Network Error:`, err.message);
   }
   console.log("--------------------------------------------------\n");
 
   // NoSQL Injection Attack
-  console.log("▶ TEST 5: NoSQL Injection on /forgot-password...");
+  console.log("Test 5: NoSQL Injection on /forgot-password...");
   console.log(
-    "  ↳ Sending a MongoDB Operator {$ne: null} instead of an email string...",
+    "Sending a MongoDB Operator {$ne: null} instead of an email string...",
   );
   try {
     const res5 = await fetch(`${API_URL}/forgot-password`, {
@@ -120,16 +118,16 @@ async function runTests() {
     });
 
     // If this sends a 200OK, my database is vulnerable
-    console.log(`  ↳ Status: HTTP ${res5.status}`);
+    console.log(`Status: HTTP ${res5.status}`);
     const text5 = await res5.text();
-    console.log(`  ↳ Server Reply:`, text5);
+    console.log(`Server Reply:`, text5);
   } catch (err) {
-    console.log(`  ↳ Network Error:`, err.message);
+    console.log(`Network Error:`, err.message);
   }
   console.log("--------------------------------------------------\n");
 
   // The "Ghost" Payload (Empty Data)
-  console.log("▶ TEST 6: Sending an empty request to /login...");
+  console.log("Test 6: Sending an empty request to /login...");
   try {
     const res6 = await fetch(`${API_URL}/login`, {
       method: "POST",
