@@ -404,7 +404,7 @@ app.get("/health", async (req, res) => {
   await sodium.ready;
   res.json({
     status: "SureWill Secure Vault Status: Active",
-    protocol: "HTTPS/TLS 1.3",
+    protocol: "HTTPS/TLS 1.2",
     crypto: `libsodium ${sodium.sodium_version_string()} ready`,
   });
 });
