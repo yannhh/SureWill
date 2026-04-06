@@ -1,10 +1,9 @@
-import dbConnection from "./db";
 import { User, Beneficiary } from "./models";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import dbConnection from "./db";
 
 dotenv.config();
-dbConnection();
 
 let transporter: nodemailer.Transporter;
 
@@ -32,7 +31,10 @@ mailerSetup().catch(console.error);
  * Im using Ethereal Mail to simulate the real-world notification. (Production SMTP has payments).
  * Mock SMTP email to tell the beneficiary that the user's assets have been released.
  */
-async function sendNotification(beneficiaryEmail: string, userName: string) {
+async function sendNotification(
+  beneficiaryEmail: string,
+  beneficiaryName: string,
+) {
   if (!transporter) await mailerSetup(); //This ensures the transporter is ready before sending
 
   // Defining the email content and then sending it
@@ -40,8 +42,8 @@ async function sendNotification(beneficiaryEmail: string, userName: string) {
     from: '"SureWill Digital Company" <no-reply@surewill.com>',
     to: beneficiaryEmail,
     subject: "Action Required: Digital Asset Transfer",
-    text: `Dear ${userName}, a digital asset has been released to you. Please log in to SureWill to view its contents.`,
-    html: `<b>Dear ${userName}, </b><p> A digital asset has been released to you.</p><p>Please log in to SureWill to claim the assets.</p>`,
+    text: `Dear ${beneficiaryName}, a digital asset has been released to you. Please log in to SureWill to view its contents.`,
+    html: `<b>Dear ${beneficiaryName}, </b><p> A digital asset has been released to you.</p><p>Please log in to SureWill to claim the assets.</p>`,
   });
 
   console.log(`[EMAIL] Notification has been sent to ${beneficiaryEmail}`);
@@ -154,8 +156,8 @@ async function checkInactivity() {
         const heirs = await Beneficiary.find({ userId: user._id });
 
         for (const heir of heirs) {
-          if (heir.email) {
-            await sendNotification(heir.email, user.username);
+          if (heir.email && heir.full_name) {
+            await sendNotification(heir.email, heir.full_name);
           }
         }
         console.log(
@@ -168,5 +170,16 @@ async function checkInactivity() {
   }
 }
 
-checkInactivity();
-setInterval(checkInactivity, 10000);
+async function start() {
+  try {
+    await dbConnection();
+    await mailerSetup();
+    await checkInactivity();
+    setInterval(checkInactivity, 10000);
+    console.log("Heartbeat Monitor is now running.");
+  } catch (err) {
+    console.error("Heartbeat Monitor Error", err);
+  }
+}
+
+start();
