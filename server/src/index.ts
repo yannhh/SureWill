@@ -594,7 +594,7 @@ app.post("/api/forgot-password", async (req, res) => {
     await user.save();
 
     // hardcoded the full reset URL and send it to the user's email because I'm getting API
-    const resetURL = `http://localhost:3000/reset-password?token=${token}`;
+    const resetURL = `https://localhost:3000/reset-password?token=${token}`;
     await sendResetEmail(user.email as string, resetURL);
 
     res.json({ message: "Password reset link has been sent to your email." });
